@@ -26,11 +26,14 @@ from .goal import Goal, GoalState, GoalTracker
 from .integrity import (CircuitConstructionGuard, IntegrityEvidence,
                         IntegrityFilter, IntegrityViolation, canonical_hash,
                         monic_sigma, sigma_scale_factor)
+from .kaggle_init import REPO_URL, detect_environment, init as kaggle_init
 from .mvp import AutoMvp, MvpResult
+from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
+                       artifact_name, promotion_gm, required_dqi_ratio)
 from .proxy import (CandidateMeta, MetadataProxy, ProxyVerdict,
                     calibrate_proxy, estimate_S, proxy_merit)
 
-__version__ = "0.3.1"
+__version__ = "0.3.2"
 
 __all__ = [
     "Checkpoint",
@@ -41,6 +44,10 @@ __all__ = [
     "CircuitConstructionGuard", "IntegrityEvidence",
     "IntegrityFilter", "IntegrityViolation", "canonical_hash",
     "monic_sigma", "sigma_scale_factor",
+    "REPO_URL", "detect_environment", "kaggle_init",
+    "AutoMvp", "MvpResult",
+    "ArtifactStore", "Pipeline", "PromotionGate",
+    "artifact_name", "promotion_gm", "required_dqi_ratio",
     "AutoMvp", "MvpResult",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",

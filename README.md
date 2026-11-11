@@ -49,6 +49,28 @@ examples/         ejemplo_searchloop_v021.py, ejemplo_auto_mvp_v030.py
 SPEC_AUTO_MVP.md  la especificación v0.0.1 y qué se implementó de ella
 ```
 
+## Pipeline por fases (6 h / 24 h)
+
+Ver `PIPELINE.md` y `auto_mvp/pipeline.py`. Tres fases:
+
+1. **Filtro rápido:** el proxy evalúa variantes paramétricas en
+   milisegundos y descarta lo inviable sin compilar nada.
+2. **Promoción por beneficio real:** solo si la GM estimada alcanza
+   la meta (por defecto **30.00**, frente al baseline 1.00) se da
+   luz verde. Con invsqrt certificado (20.65x) y química propia
+   (1.0x), 30.00 exige DQI ~1307x: Q=400 con T=95,000 da 29.99
+   (no promueve); Q=400 con T=90,000 da ~30.5 (promueve). Con
+   química pública (10.27x) bastaría DQI ~127x.
+3. **Compilación pesada y artefactos:** lo promovido se guarda como
+   `i<iteración>-<puntaje>` (ej. `i120549-34.16`) y solo el
+   verificador oficial lo confirma.
+
+El pipeline corre en bloques con presupuesto de tiempo y se reanuda
+desde `runs/state.json`. El notebook lo inicializa con
+`auto_mvp/kaggle_init.py`: los datos de la competencia son de solo
+lectura (`/kaggle/input`), el código viene del repo (clon o snapshot
+con su SHA), y todo lo producido va a `<working>/runs/`.
+
 ## Uso rápido
 
 ```python
@@ -116,3 +138,7 @@ se inventó nada para tapar el hueco.
   de verificación por hash de parámetros, rotación del ledger a
   1 MB, y el orquestador guarda la cadena CVV y el ledger en el
   directorio del run.
+- **v0.3.2** — Pipeline por fases (6 h / 24 h): filtro rápido por
+  proxy, puerta de promoción por GM estimada (meta 30.00), artefactos
+  `i<iter>-<score>`, reanudación por estado, y `kaggle_init` con la
+  separación inmutable / código / trabajo.
