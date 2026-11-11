@@ -9,6 +9,7 @@ la puerta es afilada); Q=400/T=90,000 da GM ~30.53 (promueve).
 from __future__ import annotations
 
 import json
+import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -116,8 +117,14 @@ def test_pipeline_phases_and_resume():
 def test_kaggle_init_local():
     assert detect_environment() == "local"
     with tempfile.TemporaryDirectory() as d:
+        # La copia vendida como la lleva el notebook: un directorio que
+        # CONTIENE el paquete (auto-mvp-vendored/auto_mvp/), no el
+        # paquete mismo.
+        vendored_parent = Path(d) / "auto-mvp-vendored"
+        shutil.copytree(Path(__file__).resolve().parents[1] / "auto_mvp",
+                        vendored_parent / "auto_mvp")
         env = init(working_dir=d, input_dir=str(Path.home() / "workspace/sandbox-run"),
-                   vendored_path=Path(__file__).resolve().parents[1] / "auto_mvp",
+                   vendored_path=vendored_parent,
                    commit_sha="test-sha-123")
         assert env.kind == "local"
         assert env.code_source in ("vendored", "cloned")

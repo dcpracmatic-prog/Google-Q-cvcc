@@ -104,6 +104,11 @@ def init(repo_url: str = REPO_URL,
         if code_path.exists():
             shutil.rmtree(code_path)
         shutil.copytree(vendored_path, code_path)
+        # La copia vendida puede ser el paquete mismo (auto_mvp/) o el
+        # directorio que lo contiene (auto-mvp-vendored/auto_mvp/):
+        # el code_path es el directorio que CONTIENE __init__.py.
+        if not (code_path / "__init__.py").exists():
+            code_path = code_path / "auto_mvp"
         source = "vendored"
     else:
         # Último recurso: el paquete ya está en sys.path (correr dentro

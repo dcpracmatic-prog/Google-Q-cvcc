@@ -142,3 +142,7 @@ se inventó nada para tapar el hueco.
   proxy, puerta de promoción por GM estimada (meta 30.00), artefactos
   `i<iter>-<score>`, reanudación por estado, y `kaggle_init` con la
   separación inmutable / código / trabajo.
+- **v0.3.3** — Corrección del init: la copia vendida puede ser el
+  paquete mismo o el directorio que lo contiene (el notebook lleva
+  `auto-mvp-vendored/auto_mvp/`); el test del init usa el layout del
+  notebook.
