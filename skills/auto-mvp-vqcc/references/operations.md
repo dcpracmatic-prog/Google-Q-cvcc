@@ -96,6 +96,37 @@ temporaries_total, allowed_dirty, shots, verified_by). Salida:
 `{"ok": true/false, "reasons": [...]}`. Un kind "projection"
 (solo números, sin circuito) NUNCA pasa.
 
+## export_module
+
+Exporta e inyecta un módulo promovido al dataset de trabajo.
+Entrada: un record promovido (iteration, gm, S, ratios, task, kind,
+meta, metrics, call_graph, source, integrity). Salida: las rutas
+del artefacto y del dataset, qué trae (grafo, código fuente) y el
+índice del dataset.
+
+```json
+{
+  "name": "i1-11.70",
+  "artifact_dir": "runs/i1-11.70",
+  "dataset_dir": "runs/dataset/i1-11.70",
+  "files": ["runs/i1-11.70/structure.json", "runs/i1-11.70/module.py",
+            "runs/dataset/i1-11.70/structure.json", "runs/dataset/i1-11.70/module.py"],
+  "has_call_graph": true,
+  "has_source": true,
+  "dataset_index": [{"name": "i1-11.70", "kind": "candidate", "task": "dqi",
+                     "gm": 11.697, "S": {"dqi": 3.2331e12},
+                     "has_call_graph": true, "has_source": true}]
+}
+```
+
+El `module.py` exportado, corrido en un proceso limpio (solo
+stdlib), reproduce los números del record: Montgomery b=17 da
+S 3.2331e12, GM 11.697, `ok: true`, `has_call_graph: true`. El
+cargador (`WorkingDataset.load`) devuelve el grafo tunelado
+(T 1,315,731, no el base 1,511,522) y la ruta del código
+ejecutable. Esto NO es el submission.zip: ese sigue fail-closed
+(solo los tres verificadores en modo full lo arman).
+
 ## promotion_gate
 
 Lo que exige `meta_mvp`. Sin S: `{"meta_mvp": 30.0,

@@ -12,6 +12,7 @@ directorio temporal (o en el que se le pase) y nunca toca el repo.
 """
 from __future__ import annotations
 
+import json
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -177,6 +178,44 @@ def check_integrity(evidence: dict[str, Any]) -> dict[str, Any]:
     return {"ok": ok, "reasons": reasons}
 
 
+def export_module(record: dict[str, Any],
+                  runs_dir: str | Path | None = None) -> dict[str, Any]:
+    """Exporta e inyecta un módulo promovido al dataset de trabajo.
+
+    Entrada: el record promovido (iteration, gm, S, ratios, task,
+    kind, meta, metrics, call_graph, source, integrity). Escribe
+    structure.json, module.py y source/... en el artefacto y en
+    ``<runs_dir>/dataset/<nombre>/``, y actualiza el índice.
+    Salida: las rutas y qué trae (grafo, código fuente).
+    """
+    from .dataset import WorkingDataset, export_candidate
+    tmp = tempfile.TemporaryDirectory() if runs_dir is None else None
+    try:
+        dest = Path(runs_dir) if runs_dir is not None \
+            else Path(tmp.name) / "runs"
+        artifact_dir = dest / (record.get("artifact_name") or "i0-0.00")
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        # El manifiesto del artefacto (el de siempre) va primero.
+        manifest = {"artifact": artifact_dir.name,
+                    "iteration": record.get("iteration"),
+                    "estimated_gm": record.get("gm"),
+                    "kind": record.get("kind", "candidate"),
+                    "task": record.get("task", ""),
+                    "S": record.get("S"), "ratios": record.get("ratios", {}),
+                    "source_commit": record.get("source_commit", ""),
+                    "phase": "PROMOTED", "compiled": False}
+        (artifact_dir / "manifest.json").write_text(
+            json.dumps(manifest, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+        out = export_candidate(record, artifact_dir,
+                               WorkingDataset(dest / "dataset").root)
+        out["dataset_index"] = WorkingDataset(dest / "dataset").index()
+        return out
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
 def promotion_gate(meta_mvp: float = 30.0,
                    S: dict[str, float] | None = None) -> dict[str, Any]:
     """La puerta de promoción: GM de un S y lo que exige meta_mvp.
@@ -201,5 +240,6 @@ OPERATIONS = {
     "decode_json_config": decode_json_config,
     "run_orchestrator": run_orchestrator,
     "check_integrity": check_integrity,
+    "export_module": export_module,
     "promotion_gate": promotion_gate,
 }

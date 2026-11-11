@@ -67,22 +67,39 @@ encima de 23.94667, y solo se envía lo que pasa los tres
 verificadores oficiales (puerta fail-closed:
 `numeric_lab.fail_closed_gate`).
 
-### Fase 3 — Compilación pesada y artefactos
+### Fase 3 — Compilación pesada, artefactos y dataset de trabajo
 
 Solo lo promovido llega aquí. Se invierten las horas de cómputo
 (4, 6 o las que permita el ciclo de Kaggle) y, si el verificador
-oficial lo confirma, el artefacto queda guardado en un dataset con
-el número de iteración y la calificación estimada:
+oficial lo confirma, el artefacto queda guardado con el número de
+iteración y la calificación estimada:
 
 ```
 runs/i120549-34.16/
-  candidate.json   (el candidato: tarea, S, ratios, métricas)
   manifest.json    (iteración, GM estimada, SHA del código, fase)
+  structure.json   (v0.8.0: grafo de llamadas completo, métricas, evidencia)
+  module.py        (v0.8.0: código ejecutable, solo stdlib; python module.py)
+  source/...       (v0.8.0: el código del constructor, cuando el candidato lo trae)
 ```
+
+El fail-closed está perfecto para el submission.zip final, pero un
+módulo promovido no se queda en un manifiesto con métricas frías:
+cada promoción EXPORTA e INYECTA su estructura completa y su código
+ejecutable al dataset de trabajo (`<runs_dir>/dataset/<nombre>/`,
+con el mismo contenido que el artefacto) y el índice
+`dataset/index.json` lista los módulos inyectados. El cargador
+(`WorkingDataset.load`) los carga por nombre: grafo, métricas y
+ruta del código ejecutable. La fase 3 (compilación a .kmb) consume
+el dataset, no un manifiesto pelado. La compilación a .kmb
+(kickmix) NO es parte del export: el dataset da la estructura y el
+código que la compilación necesita. Un módulo sin grafo se exporta
+con sus métricas y su module.py, y lo dice en el export. El grafo
+que se exporta es el TUNELADO (no el base).
 
 La fase del manifiesto es `PROMOTED` al guardar, `PASS` o `FAIL`
 tras la compilación pesada. Al terminar, el submission.zip se arma
-solo desde los artefactos `PASS`.
+solo desde los artefactos `PASS` (fail-closed: solo los tres
+verificadores en modo full lo arman).
 
 ## El ciclo asíncrono (6 h / 24 h)
 

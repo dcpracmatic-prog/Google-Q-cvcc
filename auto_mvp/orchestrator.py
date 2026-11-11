@@ -65,6 +65,9 @@ class OrchestratorResult:
     stopped: str = ""
     elapsed_seconds: float = 0.0
     meta_mvp: float = 0.0
+    # v0.8.0: módulos exportados al dataset de trabajo.
+    exported: int = 0
+    dataset_dir: str = ""
 
 
 class AdaptiveOrchestrator:
@@ -135,6 +138,7 @@ class AdaptiveOrchestrator:
         pipe = self.pipe
         ctx = {"screened": 0, "proxy_rejected": 0, "gate_rejected": 0,
                "promoted": 0, "tunneled": 0, "shadow_skipped": 0,
+               "exported": 0,
                "best_gm": float(pipe.state.get("best_gm", 0.0)),
                "best": None, "best_kind": pipe.best_kind,
                "since_improvement": 0, "artifacts": []}
@@ -191,7 +195,9 @@ class AdaptiveOrchestrator:
             reprogrammings=list(self.reprogrammings),
             step_log=list(self.step_log), stopped=stopped,
             elapsed_seconds=time.monotonic() - started,
-            meta_mvp=pipe.gate.meta_mvp)
+            meta_mvp=pipe.gate.meta_mvp,
+            exported=ctx["exported"],
+            dataset_dir=str(pipe.dataset.root))
 
     def _process_candidate(self, candidate: dict[str, Any],
                            ctx: dict[str, Any]) -> None:
@@ -268,6 +274,11 @@ class AdaptiveOrchestrator:
                           "S": {task: est_S}, "ratios": gate_v.ratios,
                           "task": task, "kind": kind, "meta": meta,
                           "metrics": candidate.get("metrics", {}),
+                          # v0.8.0: la estructura completa y el código
+                          # del módulo viajan con el record (export).
+                          "call_graph": candidate.get("call_graph"),
+                          "source": candidate.get("source"),
+                          "integrity": candidate.get("integrity"),
                           "source_commit": pipe.source_commit}
                 trial["accepted"] = True
                 ctx["promoted"] += 1
@@ -276,6 +287,8 @@ class AdaptiveOrchestrator:
                     ctx["shadow_skipped"] += 1
                 elif dest is not None:
                     ctx["artifacts"].append(dest)
+                    if record.get("export") and "error" not in record["export"]:
+                        ctx["exported"] += 1
                 trace["artifact"] = dest
             elif name == "observe":
                 pipe._observe()

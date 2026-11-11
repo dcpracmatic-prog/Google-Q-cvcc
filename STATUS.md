@@ -1,7 +1,22 @@
-# STATUS.md — estado del repo (v0.7.0, 2026-11-11)
+# STATUS.md — estado del repo (v0.8.0, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v0.8.0 — dataset de trabajo (exportar e inyectar módulos).**
+  El fail-closed sigue intacto para el submission.zip final, pero
+  un módulo promovido ya no se queda en un manifiesto con métricas
+  frías: cada promoción exporta e inyecta su estructura completa y
+  su código ejecutable al dataset de trabajo
+  (`<runs_dir>/dataset/<nombre>/`): `structure.json` (grafo
+  completo), `module.py` (solo stdlib, recomputa S y GM) y
+  `source/...` (el constructor, cuando el candidato lo trae). El
+  índice `dataset/index.json` lista los módulos inyectados y
+  `WorkingDataset.load` los carga por nombre. Verificado: el
+  module.py exportado de Montgomery reproduce S 3.2331e12 y GM
+  11.697 en un proceso limpio; el cargador devuelve el grafo
+  tunelado (T 1,315,731, no el base 1,511,522). Operación nueva en
+  la Skill: `export_module` (7 operaciones). Tests 7/7 nuevos;
+  suite completa 88/88.
 - **v0.7.0 — Skill / Tool nativa para LLMs (extra, no reemplazo).**
   El sistema sigue corriendo solo como antes, y además cualquier
   LLM puede invocarlo como herramienta: `skills/auto-mvp-vqcc/`

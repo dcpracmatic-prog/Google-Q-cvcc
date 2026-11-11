@@ -19,6 +19,7 @@ de la spec solo existe como proxy_merit (ranking, nunca aceptación).
 from .cache import VerificationCache, verify_with_cache
 from .checkpoint import Checkpoint
 from .cvv import CvvChain, CvvRecord, GENESIS_PREV
+from .dataset import WorkingDataset, export_candidate, render_module
 from .gf212 import DEG as GF212_DEG
 from .gf212 import MOD as GF212_MOD
 from .gf212 import monic as gf212_monic
@@ -44,10 +45,9 @@ from .numeric_lab import (NUMERIC_WARNING, fail_closed_gate,
                           float_pass_table, numeric_lab)
 from .observer import (AdaptiveObservabilityMembrane, Observer,
                        observe_trials)
-from .operations import (OPERATIONS, apply_morph_tunnel,
-                         check_integrity, decode_json_config,
-                         evaluate_candidate, promotion_gate,
-                         run_orchestrator)
+from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
+                         decode_json_config, evaluate_candidate,
+                         export_module, promotion_gate, run_orchestrator)
 from .orchestrator import AdaptiveOrchestrator, OrchestratorResult
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, pure_advantage,
@@ -58,7 +58,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "0.7.0"
+__version__ = "0.8.0"
 
 __all__ = [
     "Checkpoint",
@@ -89,8 +89,10 @@ __all__ = [
     "DEFAULT_STEPS", "StepPlan",
     "AdaptiveOrchestrator", "OrchestratorResult",
     "OPERATIONS", "apply_morph_tunnel", "check_integrity",
-    "decode_json_config", "evaluate_candidate", "promotion_gate",
-    "run_orchestrator",
+    "decode_json_config", "evaluate_candidate", "export_module",
+    "promotion_gate", "run_orchestrator",
+    "WorkingDataset", "export_candidate", "render_module",
+    "WorkingDataset", "export_candidate", "render_module",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
     "__version__",

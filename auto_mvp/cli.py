@@ -10,6 +10,7 @@ funciones para ChatGPT/Grok; ver auto_mvp/operations.py):
     decode     decodifica una config JSON (directivas en lenguaje natural)
     run        corre el orquestador adaptativo sobre candidatos + config
     integrity  pasa el filtro de integridad sobre una evidencia
+    export     exporta e inyecta un módulo promovido al dataset de trabajo
     gate       la puerta de promoción (GM, DQI necesario, S objetivo)
     version    la versión del paquete
 
@@ -25,7 +26,7 @@ import sys
 from . import __version__
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          decode_json_config, evaluate_candidate,
-                         promotion_gate, run_orchestrator)
+                         export_module, promotion_gate, run_orchestrator)
 
 
 def _load(path: str | None) -> dict:
@@ -71,6 +72,10 @@ def main(argv: list[str] | None = None) -> int:
 
     add("integrity", "pasa el filtro de integridad sobre una evidencia")
 
+    x = add("export", "exporta e inyecta un módulo promovido al dataset")
+    x.add_argument("--runs-dir", default=None,
+                   help="directorio de runs (si no, temporal)")
+
     g = add("gate", "la puerta de promoción")
     g.add_argument("--meta-mvp", type=float, default=30.0)
     g.add_argument("--S", dest="S", default=None,
@@ -105,6 +110,8 @@ def main(argv: list[str] | None = None) -> int:
                                    best_S=best)
         elif args.op == "integrity":
             out = check_integrity(_load(args.inp))
+        elif args.op == "export":
+            out = export_module(_load(args.inp), runs_dir=args.runs_dir)
         elif args.op == "gate":
             s = json.loads(args.S) if args.S else None
             out = promotion_gate(args.meta_mvp, S=s)

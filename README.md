@@ -152,6 +152,25 @@ circuito DQI kickmix no es un Bloq de Qualtran.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.8.0** — **Dataset de trabajo (exportar e inyectar
+  módulos):** el fail-closed sigue intacto para el submission.zip
+  final, pero un módulo promovido ya no se queda en un manifiesto
+  con métricas frías: cada promoción exporta e inyecta su
+  estructura completa y su código ejecutable al dataset de trabajo
+  (`<runs_dir>/dataset/<nombre>/`): `structure.json` (grafo de
+  llamadas completo, métricas, evidencia), `module.py` (código
+  ejecutable, solo stdlib: rebuild la estructura y recomputa S y
+  GM; `python module.py` lo verifica) y `source/...` (el código del
+  constructor, cuando el candidato lo trae). El índice
+  `dataset/index.json` lista los módulos inyectados y el cargador
+  (`WorkingDataset.load`) devuelve el grafo, las métricas y la ruta
+  del código ejecutable. La fase 3 (compilación) consume el
+  dataset, no un manifiesto pelado. Operación nueva en la Skill:
+  `export_module` (CLI, MCP, tools.py, functions.json: 7
+  operaciones). Verificado: el module.py exportado de Montgomery
+  reproduce S 3.2331e12 y GM 11.697 en un proceso limpio, y el
+  cargador devuelve el grafo tunelado (T 1,315,731, no el base
+  1,511,522). Tests 7/7 nuevos, 88/88 en total.
 - **v0.7.0** — **Skill / Tool nativa para LLMs (extra, no
   reemplazo):** el sistema sigue corriendo solo como antes, y además
   cualquier LLM puede invocarlo como herramienta. `skills/auto-mvp-vqcc/`

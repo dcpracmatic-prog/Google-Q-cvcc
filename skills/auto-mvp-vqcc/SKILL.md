@@ -51,12 +51,28 @@ python -m auto_mvp.cli tunnel --in grafo.json
 python -m auto_mvp.cli decode --in config.json
 python -m auto_mvp.cli run --in config.json --candidates cands.json --best-S '{"dqi": 3.714e12}'
 python -m auto_mvp.cli integrity --in evidencia.json
+python -m auto_mvp.cli export --in record.json --runs-dir runs
 python -m auto_mvp.cli gate --meta-mvp 30
 ```
 
 Toda entrada y salida es JSON (por archivo con `--in`, o por
 stdin/stdout). Cada operación devuelve sus números y sus motivos;
 si algo no aplica, lo dice (no se inventa).
+
+## Dataset de trabajo (v0.8.0)
+
+El fail-closed está perfecto para el submission.zip final, pero un
+módulo promovido no se queda en un manifiesto con métricas frías:
+cada promoción exporta e inyecta su estructura completa y su código
+ejecutable al dataset de trabajo (`<runs_dir>/dataset/<nombre>/`):
+`structure.json` (grafo de llamadas completo, métricas, evidencia),
+`module.py` (código ejecutable, solo stdlib: rebuild la estructura
+y recomputa S y GM; `python module.py` lo verifica) y `source/...`
+(el código del constructor, cuando el candidato lo trae). El índice
+`dataset/index.json` lista los módulos inyectados. La fase 3
+(compilación) consume el dataset, no un manifiesto pelado. La
+compilación a .kmb (kickmix) sigue siendo la fase 3, no parte del
+export.
 
 ## Operaciones (resumen; el detalle está en references/operations.md)
 
@@ -67,6 +83,7 @@ si algo no aplica, lo dice (no se inventa).
 | `decode_json_config` | decodifica config JSON + directivas | config JSON | meta_mvp, pasos, directivas, no parseadas |
 | `run_orchestrator` | corre el orquestador adaptativo | candidatos + config | promovidos, tunelados, mejor GM, meta |
 | `check_integrity` | filtro de integridad obligatorio | evidencia JSON | ok, motivos |
+| `export_module` | exporta e inyecta un módulo al dataset | record promovido | rutas, grafo, código (structure.json + module.py) |
 | `promotion_gate` | lo que exige meta_mvp | meta_mvp (+ S) | ratio DQI necesario, S objetivo, GM |
 
 ## Reglas honestas (no negociables)

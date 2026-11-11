@@ -28,6 +28,7 @@ from auto_mvp.operations import (apply_morph_tunnel as _apply_morph_tunnel,
                                  check_integrity as _check_integrity,
                                  decode_json_config as _decode_json_config,
                                  evaluate_candidate as _evaluate_candidate,
+                                 export_module as _export_module,
                                  promotion_gate as _promotion_gate,
                                  run_orchestrator as _run_orchestrator)
 
@@ -37,6 +38,7 @@ __all__ = [
     "decode_json_config",
     "run_orchestrator",
     "check_integrity",
+    "export_module",
     "promotion_gate",
 ]
 
@@ -72,6 +74,12 @@ def run_orchestrator(candidates: list[dict[str, Any]],
 def check_integrity(evidence: dict[str, Any]) -> dict[str, Any]:
     """Filtro de integridad obligatorio sobre una evidencia."""
     return _check_integrity(evidence)
+
+
+def export_module(record: dict[str, Any],
+                  runs_dir: str | None = None) -> dict[str, Any]:
+    """Exporta e inyecta un módulo promovido al dataset de trabajo."""
+    return _export_module(record, runs_dir=runs_dir)
 
 
 def promotion_gate(meta_mvp: float = 30.0,

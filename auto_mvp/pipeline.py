@@ -231,6 +231,9 @@ class PipelineResult:
     best_gm_by_side: dict[str, float] = field(default_factory=dict)
     goal_reached: bool = False
     meta_mvp: float = 0.0
+    # v0.8.0: módulos exportados al dataset de trabajo.
+    exported: int = 0
+    dataset_dir: str = ""
 
 
 class Pipeline:
@@ -296,6 +299,11 @@ class Pipeline:
         self.meta_mvp = float(self.gate.meta_mvp)
         self.store = ArtifactStore(runs_dir)
         self.runs_dir = Path(runs_dir)
+        # Dataset de trabajo (v0.8.0): los módulos promovidos se
+        # exportan e inyectan aquí con su estructura completa y su
+        # código ejecutable (nunca en /kaggle/input, que es intocable).
+        from .dataset import WorkingDataset
+        self.dataset = WorkingDataset(self.runs_dir / "dataset")
         self.compile_fn = compile_fn
         self.time_budget_seconds = time_budget_seconds
         self.source_commit = source_commit
@@ -393,6 +401,11 @@ class Pipeline:
                 topology=dict(getattr(meta, "topology", {})))
         new["metrics"] = metrics
         new["tunnel"] = res.as_dict()
+        # v0.8.0: el grafo que viaja con el candidato es el TUNELADO
+        # (res.graph, no el base: tunnel() trabaja sobre una copia).
+        # Si el export llevara el grafo base con las métricas
+        # tuneladas, la estructura y el S no coincidirían.
+        new["call_graph"] = res.graph.to_dict()
         return new, res
 
     def proxy_eval(self, candidate: dict[str, Any]) -> tuple[Any, float | None]:
@@ -417,10 +430,24 @@ class Pipeline:
         SHADOW no se guarda nada; en PROPOSE se guarda sin compilar;
         en AUTO se compila con compile_fn y el modo baja si falla
         3 veces seguidas (la gobernanza vive aquí, no en MORPH).
+
+        En PROPOSE y AUTO, el módulo promovido se EXPORTA e INYECTA
+        al dataset de trabajo (v0.8.0): su estructura completa y su
+        código ejecutable quedan en ``runs/dataset/<nombre>/`` con
+        su índice, para evaluarlo y compilarlo. El export queda en
+        ``record["export"]``. Esto NO es el submission.zip: ese sigue
+        fail-closed (solo los tres verificadores en modo full lo arman).
         """
         if self.mode == Autonomy.SHADOW:
             return None, True
         dest = self.store.save(record["iteration"], record["gm"], record)
+        record["artifact_name"] = dest.name
+        from .dataset import export_candidate
+        try:
+            record["export"] = export_candidate(
+                record, dest, self.dataset.root)
+        except Exception as e:  # el export no debe matar la promoción
+            record["export"] = {"error": str(e)}
         if self.mode == Autonomy.PROPOSE:
             return str(dest), False
         if self.compile_fn is not None:
@@ -493,6 +520,7 @@ class Pipeline:
         started = time.monotonic()
         screened = proxy_rejected = gate_rejected = promoted = 0
         shadow_skipped = 0
+        exported = 0  # v0.8.0: módulos exportados al dataset en esta corrida
         best_gm = float(self.state.get("best_gm", 0.0))
         best_kind = self.best_kind
         best: dict[str, Any] | None = None
@@ -582,6 +610,12 @@ class Pipeline:
                       "task": meta.task, "kind": kind,
                       "meta": candidate.get("meta"),
                       "metrics": candidate.get("metrics", {}),
+                      # v0.8.0: la estructura completa y el código del
+                      # módulo viajan con el record (para el export al
+                      # dataset de trabajo, no solo las métricas).
+                      "call_graph": candidate.get("call_graph"),
+                      "source": candidate.get("source"),
+                      "integrity": candidate.get("integrity"),
                       "source_commit": self.source_commit}
             dest, shadow = self.promote_and_compile(record, trial)
             if shadow:
@@ -591,6 +625,8 @@ class Pipeline:
                 continue
             if dest is not None:
                 artifacts.append(dest)
+                if record.get("export") and "error" not in record["export"]:
+                    exported += 1
             if self.observer is not None and self.iteration % self.observe_every == 0:
                 self._observe()
             # Parada por meta: la barra la dicta meta_mvp, no el flujo.
@@ -618,4 +654,6 @@ class Pipeline:
             best_gm_by_side=dict(self.best_gm_by_side),
             goal_reached=(best_gm >= self.gate.meta_mvp
                           and best_kind == "candidate"),
-            meta_mvp=self.gate.meta_mvp)
+            meta_mvp=self.gate.meta_mvp,
+            exported=exported,
+            dataset_dir=str(self.dataset.root))

@@ -120,6 +120,23 @@ TOOLS = [
         },
     },
     {
+        "name": "export_module",
+        "description": ("Exporta e inyecta un módulo promovido al dataset "
+                        "de trabajo: su estructura completa (grafo de "
+                        "llamadas) y su código ejecutable (module.py), "
+                        "para evaluarlo y compilarlo."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "record": {"type": "object",
+                           "description": "record promovido: iteration, gm, S, ratios, task, kind, meta, metrics, call_graph, source, integrity"},
+                "runs_dir": {"type": "string",
+                             "description": "directorio de runs (si no, temporal)"},
+            },
+            "required": ["record"],
+        },
+    },
+    {
         "name": "promotion_gate",
         "description": ("La puerta de promoción: lo que exige meta_mvp "
                         "(ratio DQI necesario, S objetivo) y, con S, la GM."),
