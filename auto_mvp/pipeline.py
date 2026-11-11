@@ -27,13 +27,18 @@ al parar y la siguiente corrida retoma donde quedó. El estado vive en
 ``runs/state.json``; cada promoción guarda su artefacto en
 ``runs/i<iter>-<score>/``.
 
-Qué es la meta 30.00 (medido, no prometido): con invsqrt certificado
-(20.65x) y química propia (1.0x), una GM de 30.00 exige DQI ~1307x,
-es decir S_DQI ~1.87e10, o sea Q²·T ~1.52e10: por ejemplo Q=400 con
-T=95,000 da GM 29.99. Por eso "400 cúbits" y "30.00" son la misma meta
-dicha dos veces. Con química pública (10.27x) bastaría DQI ~127x
-(Q=892, T=196,000 o Q=1,414, T=78,000). La puerta lo calcula y lo
-reporta: ``required_dqi_ratio``.
+Qué es la meta (medido, no prometido): la puerta mide contra los
+componentes del MEJOR ENVÍO, no contra los propios. El mejor envío
+(23.94667) usa invsqrt propio certificado (20.65x), DQI público
+híbrido (64.76x, S=3.7676e11) y química pública (10.27x,
+S=3.268e8): producto 13,732. Medir contra los propios (ensamble
+1.998e13, química 1.0x; GM base 2.93) da un GM que no corresponde
+al envío real. La meta 30.00 NO es alcanzable con el enfoque
+actual (veredicto 2026-11-11, verificado): para 30 el producto debe
+ser 27,000 (30^3) contra 13,732 actual (x1.966); solo por DQI
+habría que bajar T un 49.1% (DQI 127.3x con química pública). Por
+eso la puerta promueve mejoras pequeñas por encima de 23.94667, y
+solo se envía lo que pasa los tres verificadores oficiales.
 """
 from __future__ import annotations
 
@@ -44,19 +49,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from .vqcc.contracts import REFERENCE_S
+from .healing.heal import Autonomy
+from .maxcut import partition_conflict_graph
+from .observer import Observer
+from .vqcc.calibrate import Calibration, calibrate_from_candidates
+from .vqcc.contracts import BEST_GLOBAL_SCORE, BEST_SUBMISSION_S
 from .vqcc.costs import geometric_score, ratio
+from .vqcc.verify import LocalVerifier
 from .proxy import CandidateMeta, MetadataProxy
 
-# Mejores S propios medidos (los que puntúan hoy). La puerta compara
-# contra estos: una tarea que no se está optimizando aporta su mejor.
-CURRENT_BEST_S: dict[str, float] = {
-    "invsqrt": 100_568.5,      # certificado oficial
-    "dqi": 1.99836e13,         # Toom-3+V1+E2 medido (102,400 shots)
-    "dfthcsos": 3_355_599_588.32,  # baseline = referencia, ratio 1.0
-}
+# Los S que puntúan HOY son los del mejor envío (23.94667), no los
+# propios. La puerta compara contra estos: una tarea que no se está
+# optimizando aporta su componente del mejor envío.
+CURRENT_BEST_S: dict[str, float] = dict(BEST_SUBMISSION_S)
 
-PROMOTION_THRESHOLD = 30.0
+# La puerta promueve lo que bate el mejor envío. 30.00 no es la meta:
+# con el enfoque actual no es alcanzable (producto 27,000 vs 13,732).
+PROMOTION_THRESHOLD = BEST_GLOBAL_SCORE
 
 
 def promotion_gm(candidate_S: dict[str, float],
@@ -179,6 +188,13 @@ class PipelineResult:
     elapsed_seconds: float
     stopped: str
     artifacts: list[str] = field(default_factory=list)
+    shadow_skipped: int = 0
+    mode: str = "AUTO"
+    mode_transitions: list[dict[str, Any]] = field(default_factory=list)
+    last_observation: dict[str, Any] | None = None
+    partition: dict[str, Any] | None = None
+    calibration: dict[str, Any] | None = None
+    best_gm_by_side: dict[str, float] = field(default_factory=dict)
 
 
 class Pipeline:
@@ -187,20 +203,48 @@ class Pipeline:
     ``candidate_stream`` produce dicts con "meta" (CandidateMeta o
     dict) y "metrics" (para el S estimado) y opcionalmente "kind"
     ("candidate" para un módulo real, "target" para un punto
-    paramétrico hipotético del espacio de metadatos).
+    paramétrico hipotético del espacio de metadatos) y "name" (el
+    nombre de la mutación, para ubicarla en la partición MaxCut).
     ``compile_fn`` es el gancho de la fase 3: recibe el artefacto
     promovido y devuelve el resultado medido (o None si no se
     compila en esta corrida). Sin compile_fn, la promoción queda
     registrada como PENDING_COMPILATION.
     ``time_budget_seconds`` es el bloque (ej. 6 h = 21600 s): al
     agotarse, el pipeline guarda el estado y para limpio.
+
+    v0.4.0 — los tres componentes de Arturo engranan aquí:
+    - Calibración DCP (``probe``): si se pasa una sonda, el margen
+      del proxy, la paciencia (estancamiento) y el presupuesto de
+      intentos salen de la calibración, no de un número a mano. La
+      sonda debe parecerse a la carga (lección v0.2.1).
+    - MaxCut (``conflict_graph``): (nodos, aristas) del grafo de
+      conflictos; la partición divide la búsqueda en dos lados y el
+      resultado reporta el mejor GM por lado y el estancamiento por
+      lado. La partición no reordena el flujo (eso lo hace quien lo
+      alimenta): estructura la búsqueda y el reporte.
+    - Observer (``observer``): solo observa. Lee el registro de
+      trials y escribe observations.jsonl / events.jsonl; nunca veta
+      ni cambia nada. Se observa cada ``observe_every`` iteraciones
+      y al final de la corrida.
+    - Modo (gobernanza DSP, como SearchLoop): 3 fallos seguidos de
+      compilación bajan AUTO -> PROPOSE (promueve y guarda, sin
+      compilar) -> SHADOW (ni guarda). El modo es de la corrida
+      (cada bloque nuevo empieza en AUTO); las transiciones quedan
+      en state.json y en el resultado.
     """
 
     def __init__(self, proxy: MetadataProxy, gate: PromotionGate | None = None,
                  runs_dir: str | Path = "runs",
                  compile_fn: Callable[[dict[str, Any]], dict[str, Any] | None] | None = None,
                  time_budget_seconds: float | None = None,
-                 source_commit: str = ""):
+                 source_commit: str = "",
+                 calibration: Calibration | None = None,
+                 probe: list[dict[str, Any]] | None = None,
+                 verifier: Any | None = None,
+                 conflict_graph: tuple[list[str], list[tuple]] | None = None,
+                 observer: Observer | None = None,
+                 observe_every: int = 50,
+                 max_consecutive_compile_failures: int = 3):
         self.proxy = proxy
         self.gate = gate or PromotionGate()
         self.store = ArtifactStore(runs_dir)
@@ -212,6 +256,55 @@ class Pipeline:
         self.state = self._load_state()
         self.best_S: dict[str, float] = dict(self.state.get("best_S", {}))
         self.iteration: int = int(self.state.get("iteration", 0))
+        # Calibración DCP: la sonda manda (margen, paciencia, presupuesto).
+        self.calibration = calibration
+        if probe is not None:
+            self.calibration = calibrate_from_candidates(
+                proxy.spec, probe, verifier or LocalVerifier(proxy.spec))
+        if self.calibration is not None:
+            self.proxy.margin = self.calibration.margin
+            self.stagnation_limit: int | None = self.calibration.stagnation_limit
+            self.max_trials_default: int | None = self.calibration.max_trials
+        else:
+            self.stagnation_limit = None
+            self.max_trials_default = None
+        # MaxCut: partición del grafo de conflictos (una vez, al inicio).
+        self.partition = None
+        self.side_of: dict[str, str] = {}
+        if conflict_graph is not None:
+            nodes, edges = conflict_graph
+            self.partition = partition_conflict_graph(nodes, edges)
+            for name in self.partition.side_a:
+                self.side_of[name] = "A"
+            for name in self.partition.side_b:
+                self.side_of[name] = "B"
+        self.best_gm_by_side: dict[str, float] = dict(
+            self.state.get("best_gm_by_side", {}))
+        self.since_improvement_by_side: dict[str, int] = {}
+        # Observer: solo observa.
+        self.observer = observer
+        self.observe_every = observe_every
+        self.last_observation: dict[str, Any] | None = None
+        self.trials_log: list[dict[str, Any]] = []
+        # Modo: AUTO -> PROPOSE -> SHADOW (pegajoso dentro de la corrida).
+        self.mode = Autonomy.AUTO
+        self.mode_transitions: list[dict[str, Any]] = list(
+            self.state.get("mode_transitions", []))
+        self._consecutive_compile_failures = 0
+        self.max_consecutive_compile_failures = max_consecutive_compile_failures
+
+    def _drop_mode(self, reason: str) -> None:
+        order = [Autonomy.AUTO, Autonomy.PROPOSE, Autonomy.SHADOW]
+        i = order.index(self.mode)
+        if i >= len(order) - 1:
+            return
+        old = self.mode
+        self.mode = order[i + 1]
+        transition = {"from": old.value, "to": self.mode.value,
+                      "reason": reason, "iteration": self.iteration,
+                      "ts": time.time()}
+        self.mode_transitions.append(transition)
+        self._consecutive_compile_failures = 0
 
     def _load_state(self) -> dict[str, Any]:
         if self.state_path.exists():
@@ -226,64 +319,142 @@ class Pipeline:
         self.state_path.write_text(json.dumps({
             "iteration": self.iteration,
             "best_S": self.best_S,
+            "best_gm": self.state.get("best_gm", 0.0),
+            "best_gm_by_side": self.best_gm_by_side,
+            "mode_transitions": self.mode_transitions,
             "source_commit": self.source_commit,
         }, indent=1, ensure_ascii=False), encoding="utf-8")
+
+    def _observe(self) -> None:
+        if self.observer is not None:
+            self.last_observation = self.observer.observe(
+                self.trials_log, self.iteration)
+            # El observador NUNCA veta: solo reporta. Es el LAZO el
+            # que lee su reporte y gobierna (como en primitive.v7, donde
+            # la gobernanza es una capa aparte y desactivada por
+            # defecto): un régimen CONFLICTO o INSUFICIENTE baja un
+            # escalón de autonomía.
+            regime = self.last_observation.get("regime")
+            if regime in ("CONFLICTO", "INSUFICIENTE"):
+                self._drop_mode(f"observer: régimen {regime}")
 
     def run(self, candidate_stream: Iterable[dict[str, Any]],
             max_iterations: int | None = None) -> PipelineResult:
         started = time.monotonic()
         screened = proxy_rejected = gate_rejected = promoted = 0
+        shadow_skipped = 0
         best_gm = float(self.state.get("best_gm", 0.0))
         best: dict[str, Any] | None = None
         artifacts: list[str] = []
         stopped = "stream agotado"
+        # Presupuesto de intentos: el explícito, o el calibrado (DCP).
+        run_limit = (max_iterations if max_iterations is not None
+                     else self.max_trials_default)
+        run_count = 0
+        since_improvement = 0
         for candidate in candidate_stream:
-            if max_iterations is not None and self.iteration >= max_iterations:
+            if run_limit is not None and run_count >= run_limit:
                 stopped = "límite de iteraciones"
                 break
             if (self.time_budget_seconds is not None
                     and time.monotonic() - started >= self.time_budget_seconds):
                 stopped = "presupuesto de tiempo agotado"
                 break
+            if (self.stagnation_limit is not None
+                    and since_improvement >= self.stagnation_limit
+                    and (self.partition is None or all(
+                        v >= self.stagnation_limit
+                        for v in self.since_improvement_by_side.values()))):
+                stopped = "estancamiento"
+                break
             self.iteration += 1
+            run_count += 1
             screened += 1
             meta = candidate.get("meta")
             if isinstance(meta, dict):
                 meta = CandidateMeta(**meta)
+            side = self.side_of.get(candidate.get("name", "")) or None
+            kind = candidate.get("kind", "candidate")
+            trial: dict[str, Any] = {"S": None, "passed": False,
+                                     "accepted": False, "integrity_veto": False,
+                                     "kind": kind, "compile_failed": False}
+            self.trials_log.append(trial)
             # Fase 1: proxy por metadatos (milisegundos, sin construir).
             best_task_S = self.best_S.get(meta.task, CURRENT_BEST_S[meta.task])
             verdict = self.proxy.evaluate(meta, best_task_S)
             if not verdict.ok:
                 proxy_rejected += 1
+                if self.observer is not None and self.iteration % self.observe_every == 0:
+                    self._observe()
                 continue
             # S estimado del candidato (su tarea) y puerta de promoción.
             from .proxy import estimate_S
             est_S = verdict.s_estimate if verdict.s_estimate is not None else estimate_S(meta)
+            trial["S"] = est_S
+            trial["passed"] = True
             cand_S = {meta.task: est_S}
             gate_v = self.gate.evaluate(cand_S)
-            if gate_v.gm > best_gm:
+            improved = gate_v.gm > best_gm
+            if improved:
                 best_gm = gate_v.gm
+                since_improvement = 0
                 best = {"iteration": self.iteration, "gm": gate_v.gm,
                         "S": cand_S, "ratios": gate_v.ratios,
                         "meta": candidate.get("meta"),
-                        "kind": candidate.get("kind", "candidate")}
+                        "kind": kind}
+                if side is not None:
+                    self.best_gm_by_side[side] = gate_v.gm
+                    self.since_improvement_by_side[side] = 0
+            else:
+                since_improvement += 1
+                if side is not None:
+                    self.since_improvement_by_side[side] = (
+                        self.since_improvement_by_side.get(side, 0) + 1)
             if not gate_v.promote:
                 gate_rejected += 1
+                if self.observer is not None and self.iteration % self.observe_every == 0:
+                    self._observe()
                 continue
             # Fase 2 superada: promoción. Fase 3: artefacto + compilación.
+            trial["accepted"] = True
             promoted += 1
             record = {"iteration": self.iteration, "gm": gate_v.gm,
                       "S": cand_S, "ratios": gate_v.ratios,
-                      "task": meta.task, "kind": candidate.get("kind", "candidate"),
+                      "task": meta.task, "kind": kind,
                       "meta": candidate.get("meta"),
                       "metrics": candidate.get("metrics", {}),
                       "source_commit": self.source_commit}
+            if self.mode == Autonomy.SHADOW:
+                # SHADOW: se sigue evaluando pero no se cambia nada.
+                shadow_skipped += 1
+                if self.observer is not None and self.iteration % self.observe_every == 0:
+                    self._observe()
+                continue
             dest = self.store.save(self.iteration, gate_v.gm, record)
             artifacts.append(str(dest))
-            if self.compile_fn is not None:
-                measured = self.compile_fn(record)
+            if self.mode == Autonomy.PROPOSE:
+                # PROPOSE: se registra, no se compila.
+                pass
+            elif self.compile_fn is not None:
+                try:
+                    measured = self.compile_fn(record)
+                except Exception as e:  # el gancho falló: se cuenta, no se muere
+                    measured = {"official_pass": False, "error": str(e)}
                 if measured is not None:
                     self.store.mark_compiled(dest, measured)
+                    if measured.get("official_pass"):
+                        self._consecutive_compile_failures = 0
+                    else:
+                        trial["compile_failed"] = True
+                        self._consecutive_compile_failures += 1
+                        if (self._consecutive_compile_failures
+                                >= self.max_consecutive_compile_failures):
+                            self._drop_mode(
+                                f"compilación falló "
+                                f"{self._consecutive_compile_failures} veces seguidas")
+            if self.observer is not None and self.iteration % self.observe_every == 0:
+                self._observe()
+        self._observe()
         self.state["best_gm"] = best_gm
         self._save_state()
         return PipelineResult(
@@ -291,4 +462,9 @@ class Pipeline:
             gate_rejected=gate_rejected, promoted=promoted,
             best_gm=best_gm, best=best, iterations=self.iteration,
             elapsed_seconds=time.monotonic() - started, stopped=stopped,
-            artifacts=artifacts)
+            artifacts=artifacts, shadow_skipped=shadow_skipped,
+            mode=self.mode.value, mode_transitions=self.mode_transitions,
+            last_observation=self.last_observation,
+            partition=(self.partition.as_dict() if self.partition else None),
+            calibration=(self.calibration.as_dict() if self.calibration else None),
+            best_gm_by_side=dict(self.best_gm_by_side))

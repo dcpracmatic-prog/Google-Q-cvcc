@@ -55,8 +55,25 @@ BEST_OWN_S = {
     "dqi": 1.99836e13,  # Toom-3+V1+E2 medido; BM+Forney es proyección, no medido
     "dfthcsos": 3_355_599_588.32,
 }
-# Mejor envío global (combo-b-pack-v2, componentes públicos): 23.94667
+# Mejor envío global (combo-b-pack-v2, ref 58076483): 23.94667.
+# Sus componentes SON los que puntúan en el leaderboard, no los
+# propios: invsqrt propio certificado S=100,568.5 (20.65x); DQI
+# público híbrido (jday96314/QuantumAI, Q=892) S=3.7676e11 (64.76x);
+# química pública (9,143,40) S=326,800,029.87 (10.27x).
+# Producto = 20.65*64.76*10.27 = 13,732 -> GM 23.94667.
+# La puerta del pipeline DEBE medir contra estos S: medir contra
+# BEST_OWN_S (el ensamble propio, GM base 2.93) da un GM que no
+# corresponde al envío real (falsos positivos/negativos).
+BEST_SUBMISSION_S = {
+    "invsqrt": 100_568.5,
+    "dqi": 3.7676e11,
+    "dfthcsos": 326_800_029.87,
+}
 BEST_GLOBAL_SCORE = 23.94667
+# Veredicto 2026-11-11 (Arturo, verificado): 30.00 NO es alcanzable
+# con el enfoque actual. Para 30 el producto debe ser 27,000 (30^3)
+# contra 13,732 actual (x1.966); solo por DQI habría que bajar T un
+# 49.1% (DQI 127.3x). La puerta promueve lo que bate 23.94667.
 
 
 @dataclass(frozen=True)

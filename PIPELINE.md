@@ -34,24 +34,26 @@ y el verificador nunca se entera de que existió.
 
 ### Fase 2 — Promoción por beneficio real
 
-Solo si la estimación matemática alcanza la meta definida se da luz
-verde. La meta por defecto es **GM estimada >= 30.00** (frente al
-baseline 1.00 = la referencia), con la fórmula de ponderación de la
-competencia: media geométrica de (referencia / propio) en las 3
-tareas. La promoción significa "vale la pena gastar compilación
-aquí", no "esto va a puntuar 30": la estimación es una proyección.
+Solo si la estimación matemática bate el mejor envío se da luz
+verde. La meta por defecto es **GM estimada > 23.94667** (el mejor
+envío 58076483), con la fórmula de ponderación de la competencia:
+media geométrica de (referencia / propio) en las 3 tareas. La
+promoción significa "vale la pena gastar compilación aquí", no "esto
+va a puntuar 23.95": la estimación es una proyección.
 
-Qué exige la meta 30.00 (medido):
+La puerta mide contra los componentes del mejor envío (invsqrt
+propio 20.65x, DQI público 64.76x, química pública 10.27x;
+producto 13,732), no contra los propios. Batir el envío exige
+DQI ~64.76x, es decir, batir el DQI público (S < 3.7676e11).
 
-| Caso | DQI necesario | Ejemplo que lo logra |
-|---|---|---|
-| Química propia (1.0x) | ~1307x | Q=400, T=90,000 (GM ~30.5) |
-| Química pública (10.27x) | ~127x | Q=892, T=195,000 (GM ~30.0) |
-
-El filo es afilado a propósito: Q=400/T=95,000 da GM 29.99 y NO
-promueve; Q=892/T=196,000 da 29.9977 y NO promueve. Por eso "400
-cúbits" y "30.00" son la misma meta dicha dos veces (con química
-propia): bajar de ~1,900 a ~400 cúbits es lo que pide la puerta.
+La meta 30.00 NO es alcanzable con el enfoque actual (veredicto
+2026-11-11, verificado): para 30 el producto debe ser 27,000
+(30^3) contra 13,732 actual (x1.966); solo por DQI habría que
+bajar T un 49.1% (DQI 127.3x con química pública). El mayor peso
+de T está en unextract/unconvert (~43%): ese es el bloque que
+vale la pena atacar. La puerta promueve mejoras pequeñas por
+encima de 23.94667, y solo se envía lo que pasa los tres
+verificadores oficiales.
 
 ### Fase 3 — Compilación pesada y artefactos
 
@@ -100,7 +102,7 @@ from auto_mvp import MetadataProxy, Pipeline, PromotionGate
 from auto_mvp.vqcc import dqi_spec
 
 proxy = MetadataProxy(dqi_spec(), hard_caps={"max_qubits": 2000}, margin=0.10)
-pipe = Pipeline(proxy, PromotionGate(30.0), runs_dir="runs",
+pipe = Pipeline(proxy, PromotionGate(), runs_dir="runs",
                 time_budget_seconds=6 * 3600, source_commit="abc123")
 res = pipe.run(mi_flujo_de_candidatos)
 print(res.promoted, res.best_gm, res.artifacts, res.stopped)

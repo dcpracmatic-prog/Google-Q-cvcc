@@ -55,12 +55,12 @@ Ver `PIPELINE.md` y `auto_mvp/pipeline.py`. Tres fases:
 
 1. **Filtro rápido:** el proxy evalúa variantes paramétricas en
    milisegundos y descarta lo inviable sin compilar nada.
-2. **Promoción por beneficio real:** solo si la GM estimada alcanza
-   la meta (por defecto **30.00**, frente al baseline 1.00) se da
-   luz verde. Con invsqrt certificado (20.65x) y química propia
-   (1.0x), 30.00 exige DQI ~1307x: Q=400 con T=95,000 da 29.99
-   (no promueve); Q=400 con T=90,000 da ~30.5 (promueve). Con
-   química pública (10.27x) bastaría DQI ~127x.
+2. **Promoción por beneficio real:** solo si la GM estimada bate el
+   mejor envío (por defecto **> 23.94667**) se da luz verde. La
+   puerta mide contra los componentes del mejor envío (invsqrt
+   20.65x, DQI público 64.76x, química pública 10.27x): batirlo
+   exige DQI ~64.76x. La meta 30.00 no es alcanzable con el enfoque
+   actual (producto 27,000 vs 13,732; solo por DQI, T −49.1%).
 3. **Compilación pesada y artefactos:** lo promovido se guarda como
    `i<iteración>-<puntaje>` (ej. `i120549-34.16`) y solo el
    verificador oficial lo confirma.
@@ -139,9 +139,18 @@ se inventó nada para tapar el hueco.
   1 MB, y el orquestador guarda la cadena CVV y el ledger en el
   directorio del run.
 - **v0.3.2** — Pipeline por fases (6 h / 24 h): filtro rápido por
-  proxy, puerta de promoción por GM estimada (meta 30.00), artefactos
-  `i<iter>-<score>`, reanudación por estado, y `kaggle_init` con la
-  separación inmutable / código / trabajo.
+  proxy, puerta de promoción por GM estimada (bate el mejor envío
+  23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
+  `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.4.0** — MaxCut (port fiel del C++ de Arturo) partiendo el
+  grafo de conflictos; calibración DCP en el pipeline (margen,
+  paciencia y presupuesto de la sonda); Observer con régimen
+  derivado de la bitácora (sin parámetro condition, sin veto);
+  modo AUTO→PROPOSE→SHADOW en el pipeline. **Constantes
+  corregidas:** la puerta mide contra el mejor envío
+  (BEST_SUBMISSION_S: DQI público 3.7676e11, química pública
+  3.268e8) y promueve lo que bate 23.94667; 30.00 no es alcanzable
+  con el enfoque actual (producto 27,000 vs 13,732).
 - **v0.3.3** — Corrección del init: la copia vendida puede ser el
   paquete mismo o el directorio que lo contiene (el notebook lleva
   `auto-mvp-vendored/auto_mvp/`); el test del init usa el layout del

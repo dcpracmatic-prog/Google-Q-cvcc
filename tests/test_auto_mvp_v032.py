@@ -1,10 +1,12 @@
 """Tests de AUTO_MVP v0.3.2: pipeline por fases (6h/24h), puerta de
-promoción GM>=30, artefactos i<iter>-<score>, reanudación, y el init
-de Kaggle (separación inmutable / código / trabajo).
+promoción (bate el mejor envío 23.94667), artefactos i<iter>-<score>,
+reanudación, y el init de Kaggle (separación inmutable / código /
+trabajo).
 
-La meta 30.00: con invsqrt certificado (20.65x) y química propia
-(1.0x), exige DQI ~1307x. Q=400/T=95,000 da GM 29.99 (NO promueve:
-la puerta es afilada); Q=400/T=90,000 da GM ~30.53 (promueve).
+La puerta mide contra el mejor envío (23.94667): batirlo exige DQI
+~64.76x (batir el DQI público, S=3.7676e11). La meta 30.00 NO es
+alcanzable con el enfoque actual: el producto debe ser 27,000 contra
+13,732 actual (x1.966); solo por DQI habría que bajar T un 49.1%.
 """
 from __future__ import annotations
 
@@ -33,30 +35,30 @@ def meta_dqi(Q, T, widths=None):
 
 
 def test_gate_math():
-    # La meta 30.00 exige DQI ~1307x con química propia.
-    req = required_dqi_ratio(30.0)
-    assert 1300 < req < 1315, req
-    # Q=400/T=95,000 -> GM 29.99: NO promueve (puerta afilada).
-    gm = promotion_gm({"dqi": s_dqi(400, 95_000, EPS)})
-    assert 29.9 < gm < 30.0, gm
-    assert not PromotionGate(30.0).evaluate({"dqi": s_dqi(400, 95_000, EPS)}).promote
-    # Q=400/T=90,000 -> GM ~30.5: promueve.
-    v = PromotionGate(30.0).evaluate({"dqi": s_dqi(400, 90_000, EPS)})
-    assert v.promote and v.gm > 30.0
-    # Con química pública (10.27x) basta DQI ~127x: Q=892/T=195,000.
-    pub = {"dfthcsos": 326_800_029.87}
-    req_pub = required_dqi_ratio(30.0, {"invsqrt": 100_568.5, "dqi": 1.99836e13,
-                                        "dfthcsos": 326_800_029.87})
-    assert 120 < req_pub < 135, req_pub
-    v2 = PromotionGate(30.0, {"invsqrt": 100_568.5, "dqi": 1.99836e13,
-                              "dfthcsos": 326_800_029.87}).evaluate(
-        {"dqi": s_dqi(892, 195_000, EPS)})
-    assert v2.promote and v2.gm > 30.0
-    # El filo: Q=892/T=196,000 da GM 29.9977 y NO promueve.
-    v3 = PromotionGate(30.0, {"invsqrt": 100_568.5, "dqi": 1.99836e13,
-                              "dfthcsos": 326_800_029.87}).evaluate(
-        {"dqi": s_dqi(892, 196_000, EPS)})
-    assert not v3.promote and abs(v3.gm - 30.0) < 0.01
+    # La puerta mide contra el mejor envío (23.94667): batirlo exige
+    # DQI ~64.76x, es decir, batir el DQI público (S=3.7676e11).
+    req = required_dqi_ratio()
+    assert 64 < req < 66, req
+    # Un DQI a S=3.5e11 (ratio 69.8x) bate el público: GM ~24.5, promueve.
+    v = PromotionGate().evaluate({"dqi": 3.5e11})
+    assert v.promote and 24.0 < v.gm < 25.0, v.gm
+    # Un DQI a S=4.0e11 (ratio 61.0x) no lo bate: GM ~23.5, no promueve.
+    v2 = PromotionGate().evaluate({"dqi": 4.0e11})
+    assert not v2.promote and 23.0 < v2.gm < 23.94667, v2.gm
+    # El DQI público mismo (S=3.7676e11) da GM 23.9468: el filo.
+    v3 = PromotionGate().evaluate({"dqi": 3.7676e11})
+    assert abs(v3.gm - 23.94667) < 0.01, v3.gm
+    # 30.00 no es alcanzable con el enfoque actual (veredicto
+    # 2026-11-11): el producto debe ser 27,000 contra 13,732 actual.
+    from auto_mvp.pipeline import CURRENT_BEST_S
+    from auto_mvp.vqcc.contracts import REFERENCE_S
+    prod = 1.0
+    for t, s in CURRENT_BEST_S.items():
+        prod *= REFERENCE_S[t] / s
+    assert 13_700 < prod < 13_800, prod
+    assert 27_000 / prod > 1.96
+    # Solo por DQI, 30 exigiría 127.3x (T -49.1% a Q y R fijos).
+    assert 127 < required_dqi_ratio(30.0) < 128, required_dqi_ratio(30.0)
 
 
 def test_artifact_naming_and_compiled():
@@ -83,20 +85,23 @@ def test_pipeline_phases_and_resume():
     gate = PromotionGate(30.0)
     stream = [
         {"meta": meta_dqi(1412, 1_304_706, {"S": 840, "C": 432, "B": 432, "extra": 500}),
-         "metrics": {"Q": 1412, "T": 1_304_706, "eps_plus": EPS}},  # proxy rechaza
+         "metrics": {"Q": 1412, "T": 1_304_706, "eps_plus": EPS}},  # proxy rechaza (tope)
         {"meta": meta_dqi(1412, 1_304_706),
-         "metrics": {"Q": 1412, "T": 1_304_706, "eps_plus": EPS}},  # puerta rechaza (~5.4)
+         "metrics": {"Q": 1412, "T": 1_304_706, "eps_plus": EPS}},  # proxy rechaza:
+        # el MIS (S=3.197e12) no bate el DQI público (3.7676e11), así que
+        # el proxy lo para antes de la puerta (antes, con el ensamble
+        # como base, llegaba a la puerta y daba GM ~5.4).
         {"meta": meta_dqi(400, 90_000, {"S": 400}),
          "metrics": {"Q": 400, "T": 90_000, "eps_plus": EPS},
-         "kind": "target"},  # promueve
+         "kind": "target"},  # promueve (GM 66.37 con el mejor envío)
     ]
     with tempfile.TemporaryDirectory() as d:
         runs = Path(d) / "runs"
         pipe = Pipeline(proxy, gate, runs_dir=runs, source_commit="test-sha")
         res = pipe.run(iter(stream))
         assert res.screened == 3, res
-        assert res.proxy_rejected == 1, res
-        assert res.gate_rejected == 1, res
+        assert res.proxy_rejected == 2, res
+        assert res.gate_rejected == 0, res
         assert res.promoted == 1, res
         assert res.best_gm > 30.0
         assert len(res.artifacts) == 1

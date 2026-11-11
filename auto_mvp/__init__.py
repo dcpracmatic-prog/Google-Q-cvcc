@@ -28,13 +28,18 @@ from .integrity import (CircuitConstructionGuard, IntegrityEvidence,
                         monic_sigma, sigma_scale_factor)
 from . import kaggle_init
 from .kaggle_init import REPO_URL, detect_environment
+from .maxcut import (Partition, greedy_mis, morph as maxcut_morph,
+                     exact as maxcut_exact, make_graph as maxcut_graph,
+                     partition_conflict_graph, partition_then_select)
 from .mvp import AutoMvp, MvpResult
+from .observer import (AdaptiveObservabilityMembrane, Observer,
+                       observe_trials)
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, required_dqi_ratio)
 from .proxy import (CandidateMeta, MetadataProxy, ProxyVerdict,
                     calibrate_proxy, estimate_S, proxy_merit)
 
-__version__ = "0.3.3"
+__version__ = "0.4.0"
 
 __all__ = [
     "Checkpoint",
@@ -49,6 +54,9 @@ __all__ = [
     "AutoMvp", "MvpResult",
     "ArtifactStore", "Pipeline", "PromotionGate",
     "artifact_name", "promotion_gm", "required_dqi_ratio",
+    "Partition", "greedy_mis", "maxcut_morph", "maxcut_exact",
+    "maxcut_graph", "partition_conflict_graph", "partition_then_select",
+    "AdaptiveObservabilityMembrane", "Observer", "observe_trials",
     "AutoMvp", "MvpResult",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
