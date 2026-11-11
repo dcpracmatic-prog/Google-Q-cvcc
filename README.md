@@ -152,6 +152,24 @@ circuito DQI kickmix no es un Bloq de Qualtran.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.7.0** — **Skill / Tool nativa para LLMs (extra, no
+  reemplazo):** el sistema sigue corriendo solo como antes, y además
+  cualquier LLM puede invocarlo como herramienta. `skills/auto-mvp-vqcc/`
+  trae `SKILL.md` (formato Agent Skills: qué hace, cuándo usarlo,
+  cómo invocarlo, límites), `mcp_server.py` (servidor MCP stdio,
+  solo stdlib, para Claude), `tools.py` + `functions.json` (las 6
+  operaciones como funciones Python y esquema de function calling
+  para ChatGPT Code Interpreter y Grok), y `references/` (install
+  por entorno: Kaggle Code por snapshot vendido, Claude con
+  terminal, ChatGPT, Grok; operations con entradas/salidas y
+  ejemplos). El punto de entrada es el mismo en todos lados:
+  `auto_mvp/operations.py` + CLI (`python -m auto_mvp.cli`:
+  evaluate, tunnel, decode, run, integrity, gate, version).
+  Verificado con números: la skill invocada en sandbox reproduce
+  los del repo (gate 30 -> ratio 127.335; evaluate Montgomery ->
+  S 3.2331e12, GM 11.697; tunnel -> T 1,511,522 -> 1,315,731; run ->
+  promovido 1, tunelado 1; pip install desde el repo funciona).
+  Tests 11/11 nuevos, 81/81 en total.
 - **v0.6.0** — **Capa de adaptación dinámica (MORPH + JSON +
   orquestador adaptativo):** la formalización algorítmica es
   Qualtran. `qualtran_bridge` extrae el grafo de llamadas de un

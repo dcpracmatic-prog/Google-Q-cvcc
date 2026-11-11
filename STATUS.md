@@ -1,7 +1,20 @@
-# STATUS.md — estado del repo (v0.6.0, 2026-11-11)
+# STATUS.md — estado del repo (v0.7.0, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v0.7.0 — Skill / Tool nativa para LLMs (extra, no reemplazo).**
+  El sistema sigue corriendo solo como antes, y además cualquier
+  LLM puede invocarlo como herramienta: `skills/auto-mvp-vqcc/`
+  (SKILL.md formato Agent Skills, mcp_server.py stdio solo stdlib
+  para Claude, tools.py + functions.json para ChatGPT Code
+  Interpreter y Grok, references/install.md por entorno y
+  references/operations.md). Punto de entrada único:
+  `auto_mvp/operations.py` + CLI (`python -m auto_mvp.cli`).
+  Verificado: la skill en sandbox reproduce los números del repo
+  (gate 30 -> 127.335; evaluate Montgomery -> S 3.2331e12, GM 11.697;
+  tunnel -> T 1,511,522 -> 1,315,731; run -> promovido 1, tunelado 1;
+  pip install desde el repo funciona). Tests 11/11 nuevos; suite
+  completa 81/81.
 - **v0.6.0 — capa de adaptación dinámica.** La formalización
   algorítmica es Qualtran (Bloqs, grafo de llamadas, T/Q de primera
   clase). `qualtran_bridge.py` (puente verificado contra Qualtran

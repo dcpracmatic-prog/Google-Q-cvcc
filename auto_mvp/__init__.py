@@ -44,6 +44,10 @@ from .numeric_lab import (NUMERIC_WARNING, fail_closed_gate,
                           float_pass_table, numeric_lab)
 from .observer import (AdaptiveObservabilityMembrane, Observer,
                        observe_trials)
+from .operations import (OPERATIONS, apply_morph_tunnel,
+                         check_integrity, decode_json_config,
+                         evaluate_candidate, promotion_gate,
+                         run_orchestrator)
 from .orchestrator import AdaptiveOrchestrator, OrchestratorResult
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, pure_advantage,
@@ -54,7 +58,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "0.6.0"
+__version__ = "0.7.0"
 
 __all__ = [
     "Checkpoint",
@@ -84,6 +88,9 @@ __all__ = [
     "parse_directive",
     "DEFAULT_STEPS", "StepPlan",
     "AdaptiveOrchestrator", "OrchestratorResult",
+    "OPERATIONS", "apply_morph_tunnel", "check_integrity",
+    "decode_json_config", "evaluate_candidate", "promotion_gate",
+    "run_orchestrator",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
     "__version__",
