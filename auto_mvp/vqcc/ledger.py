@@ -13,6 +13,9 @@ from auto_mvp.healing.ledger import Ledger
 
 
 class VQCCLedger(Ledger):
+    def __init__(self, path: str | None = None, max_bytes: int | None = None):
+        super().__init__(path=path, max_bytes=max_bytes)
+
     def trial(self, task: str, mutation: str, S: float, best_S: float,
               passed: bool, accepted: bool, verified_by: str = "",
               **extra: Any) -> None:

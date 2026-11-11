@@ -40,6 +40,7 @@ from typing import Any
 
 from auto_mvp.healing.heal import Autonomy
 
+from .cache import VerificationCache, verify_with_cache
 from .vqcc.calibrate import Calibration
 from .checkpoint import Checkpoint
 from .vqcc.contracts import CircuitSpec
@@ -70,6 +71,9 @@ class MvpResult:
     health: float | None
     cvv_records: int
     checkpoint_path: str | None
+    cache_hits: int = 0
+    cache_misses: int = 0
+    cvv_path: str | None = None
     mode_transitions: list[dict[str, Any]] = field(default_factory=list)
     ledger_events: list[str] = field(default_factory=list)
 
@@ -83,6 +87,7 @@ class AutoMvp:
                  integrity: IntegrityFilter | None = None,
                  cvv: CvvChain | None = None,
                  checkpoint: Checkpoint | None = None,
+                 cache: VerificationCache | None = None,
                  autonomy: Autonomy = Autonomy.AUTO,
                  health_floor: float = 0.5,
                  max_consecutive_failures: int = 3,
@@ -92,11 +97,18 @@ class AutoMvp:
         self.goal = goal
         self.tracker = GoalTracker(goal)
         self.verifier = verifier or LocalVerifier(spec)
+        self.workdir = Path(workdir) if workdir is not None else None
+        # Con workdir, el ledger vive en disco y rota a 1 MB (idea DSP v9);
+        # sin workdir, solo en memoria (comportamiento v0.3.0).
+        if ledger is None and self.workdir is not None:
+            ledger = VQCCLedger(path=str(self.workdir / "ledger.jsonl"),
+                                max_bytes=1_048_576)
         self.ledger = ledger or VQCCLedger()
         self.calibration = calibration
         self.proxy = proxy
         self.integrity = integrity or IntegrityFilter()
         self.cvv = cvv or CvvChain()
+        self.cache = cache
         if checkpoint is None and workdir is not None:
             checkpoint = Checkpoint(Path(workdir) / "checkpoints")
         self.checkpoint = checkpoint
@@ -202,7 +214,11 @@ class AutoMvp:
                         reason="; ".join(verdict.reasons))
                     continue
             # 2b. EVALUACIÓN (verificador): S oficial, nunca la suma ponderada.
-            result = self.verifier.verify(candidate)
+            # Con caché, un candidato idéntico no se vuelve a verificar.
+            if self.cache is not None:
+                result, _hit = verify_with_cache(self.cache, self.verifier, candidate)
+            else:
+                result = self.verifier.verify(candidate)
             S = result.S if math.isfinite(result.S) else float("inf")
             # 3. AUDITORÍA (integridad): obligatoria si trae evidencia o
             #    si afirma verificación oficial.
@@ -328,6 +344,12 @@ class AutoMvp:
                   logic_integrity="PASSED_STRICT" if certified else "PASSED",
                   delta=self._delta_pct(self.spec.baseline_S, self.best_S),
                   best_found=True)
+        # La cadena CVV queda guardada junto al ledger y los checkpoints.
+        cvv_path = None
+        if self.workdir is not None:
+            self.workdir.mkdir(parents=True, exist_ok=True)
+            cvv_path = str(self.workdir / "cvv.jsonl")
+            self.cvv.save(cvv_path)
         final_health = self.detector.health()
         return MvpResult(
             best=self.best, best_S=self.best_S,
@@ -343,5 +365,8 @@ class AutoMvp:
             checkpoint_path=(str(self.checkpoint.best_path)
                              if self.checkpoint is not None and
                              self.checkpoint.best_path.exists() else None),
+            cache_hits=self.cache.hits if self.cache else 0,
+            cache_misses=self.cache.misses if self.cache else 0,
+            cvv_path=cvv_path,
             mode_transitions=self.mode_transitions,
             ledger_events=self.ledger.events())

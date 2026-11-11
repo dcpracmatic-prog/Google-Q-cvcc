@@ -22,6 +22,9 @@ construir:
 | Meta con regla de paro | Meta en S o en %, presupuesto que crece solo con mejoras, paro con motivo | `auto_mvp/goal.py` |
 | Proxy de metadatos | Criba variantes por anchos, densidades y topes antes de construir | `auto_mvp/proxy.py` |
 | Orquestador | El ciclo de 5 fases sobre los componentes v0.2.1 | `auto_mvp/mvp.py` |
+| GF(2^12) y sigma con escala | El sigma del circuito es k × mónico: se compara en forma mónica | `auto_mvp/gf212.py`, `auto_mvp/integrity.py` |
+| Caché de verificación | Un candidato idéntico no se vuelve a verificar | `auto_mvp/cache.py` |
+| Rotación del ledger | El ledger en disco rota a 1 MB | `auto_mvp/healing/ledger.py` |
 
 El mérito de aceptación es siempre el **S oficial** (DQI: R·Q²·T;
 invsqrt: Q·C; química: λ_eff·T·Q). La suma ponderada de la
@@ -108,3 +111,8 @@ se inventó nada para tapar el hueco.
   `best_verified_S` separado.
 - **v0.3.0** — AUTO_MVP: filtro de integridad, CVV, checkpoint,
   meta con regla de paro, proxy de metadatos, orquestador.
+- **v0.3.1** — Mejoras: sigma consciente de escala (GF(2^12) mod
+  0x1053, el campo del DQI; k=2314 en el shot 0 del paso 51), caché
+  de verificación por hash de parámetros, rotación del ledger a
+  1 MB, y el orquestador guarda la cadena CVV y el ledger en el
+  directorio del run.

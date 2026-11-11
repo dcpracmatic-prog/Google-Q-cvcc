@@ -34,6 +34,9 @@ import json
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from .gf212 import monic as _monic
+from .gf212 import scale_factor as _scale_factor
+
 
 def canonical_hash(values: Any) -> str:
     """SHA-256 del JSON canónico (claves ordenadas) de unos valores.
@@ -44,6 +47,16 @@ def canonical_hash(values: Any) -> str:
     blob = json.dumps(values, sort_keys=True, separators=(",", ":"),
                       ensure_ascii=False).encode("utf-8")
     return hashlib.sha256(blob).hexdigest()
+
+
+def monic_sigma(sigma: list[int]) -> list[int]:
+    """Forma mónica del sigma en GF(2^12) (primer coeficiente 1)."""
+    return _monic(sigma)
+
+
+def sigma_scale_factor(sigma: list[int], ref: list[int]) -> int | None:
+    """k tal que sigma == k·ref en GF(2^12), o None si no lo es."""
+    return _scale_factor(sigma, ref)
 
 
 @dataclass
@@ -69,6 +82,14 @@ class IntegrityEvidence:
     kind: str = "projection"
     sigma: list[int] | None = None
     sigma_ref_hash: str | None = None
+    # v0.3.1 (lección del paso 51 v3): el sigma del circuito es
+    # k × sigma mónico (mismas raíces, misma decodificación). Si se
+    # pasan los coeficientes de referencia (``sigma_ref``), la
+    # comparación se hace en forma mónica y la escala k no importa;
+    # si no, se compara el hash directo (la vía antigua). ``sigma_scale``
+    # registra la k medida (informativo, lo calcula el productor).
+    sigma_ref: list[int] | None = None
+    sigma_scale: int | None = None
     c_restored: int = 0
     b_restored: int = 0
     total_coef: int = 0
@@ -90,6 +111,8 @@ class IntegrityEvidence:
             "kind": self.kind,
             "sigma_hash": self.sigma_hash(),
             "sigma_ref_hash": self.sigma_ref_hash,
+            "sigma_ref": list(self.sigma_ref) if self.sigma_ref is not None else None,
+            "sigma_scale": self.sigma_scale,
             "c_restored": self.c_restored,
             "b_restored": self.b_restored,
             "total_coef": self.total_coef,
@@ -105,10 +128,13 @@ class IntegrityEvidence:
     @classmethod
     def from_dict(cls, d: dict[str, Any]) -> "IntegrityEvidence":
         sigma = d.get("sigma")
+        sigma_ref = d.get("sigma_ref")
         return cls(
             kind=d.get("kind", "projection"),
             sigma=list(sigma) if sigma is not None else None,
             sigma_ref_hash=d.get("sigma_ref_hash") or d.get("sigma_hash"),
+            sigma_ref=list(sigma_ref) if sigma_ref is not None else None,
+            sigma_scale=d.get("sigma_scale"),
             c_restored=int(d.get("c_restored", 0)),
             b_restored=int(d.get("b_restored", 0)),
             total_coef=int(d.get("total_coef", 0)),
@@ -160,8 +186,24 @@ class IntegrityFilter:
                 "que verificar (solo proyección)")
             return False, reasons
         got = evidence.sigma_hash()
-        if evidence.sigma is None or got is None:
+        if evidence.sigma is None:
             reasons.append("falta el sigma medido")
+        elif evidence.sigma_ref is not None:
+            # Vía consciente de escala (paso 51 v3): se comparan las
+            # formas mónicas. Un hash directo fallaría aunque el
+            # circuito sea correcto (sigma = k × mónico).
+            try:
+                monic_got = _monic(evidence.sigma)
+                monic_ref = _monic(evidence.sigma_ref)
+            except ValueError as e:
+                reasons.append(f"sigma no normalizable a mónico: {e}")
+            else:
+                if canonical_hash(monic_got) != canonical_hash(monic_ref):
+                    reasons.append("SIGMA_DIVERGENCE: el sigma (forma "
+                                   "mónica) no coincide con la referencia")
+                elif _scale_factor(evidence.sigma, evidence.sigma_ref) is None:
+                    reasons.append("SIGMA_DIVERGENCE: el sigma no es un "
+                                   "múltiplo escalar de la referencia")
         elif evidence.sigma_ref_hash is None:
             reasons.append("falta el hash del sigma de referencia")
         elif got != evidence.sigma_ref_hash:
