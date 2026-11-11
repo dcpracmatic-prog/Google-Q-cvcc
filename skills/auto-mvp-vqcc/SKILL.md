@@ -4,7 +4,7 @@ description: Optimiza candidatos de la competencia Google Quantum AI Verifiable 
 license: Apache-2.0
 compatibility: Python >=3.10, solo stdlib (el paquete auto_mvp no tiene dependencias). Qualtran es opcional (solo para extraer Bloqs reales). Funciona en Kaggle Code (snapshot vendido), Claude con terminal (MCP o CLI), ChatGPT Code Interpreter y Grok (functions.json + tools.py).
 metadata:
-  version: "0.7.0"
+  version: "0.9.0"
   repo: dcpracmatic-prog/Google-Q-cvcc (PRIVADO)
   author: Arturo Salvador Balderas Hernández
 ---
@@ -52,8 +52,33 @@ python -m auto_mvp.cli decode --in config.json
 python -m auto_mvp.cli run --in config.json --candidates cands.json --best-S '{"dqi": 3.714e12}'
 python -m auto_mvp.cli integrity --in evidencia.json
 python -m auto_mvp.cli export --in record.json --runs-dir runs
+python -m auto_mvp.cli validate --path submission.zip
 python -m auto_mvp.cli gate --meta-mvp 30
 ```
+
+## Formato del submission.zip (v0.9.0)
+
+El formato oficial vive en el repo (antes solo estaba en memoria;
+la v0.3.0 falló por duplicados). El ZIP lleva, directamente en la
+raíz (sin directorio raíz extra):
+
+```
+invsqrt.kmb  (o invsqrt.kmx, UNO solo)
+dqi.kmb      (o dqi.kmx, UNO solo)
+dfthcsos/
+    angle_k_0.kmb  (o .kmx)
+    angle_k_1.kmb
+    ...            (consecutivos desde 0, SIN huecos)
+    submission.npz (claves: U, W, H2_I, H1_I, Hsym_lower, tree_edges)
+```
+
+`validate_submission` comprueba el formato (fail-closed: cualquier
+fallo bloquea el envío): sin duplicados, sin archivos extra, un
+solo invsqrt y un solo dqi, angle_k consecutivos, y el NPZ con las
+6 claves. Con los estados de los tres verificadores, además da
+READY solo si la puerta fail-closed Y el formato pasan. El
+validador revisa el FORMATO, no el contenido: que un circuito sea
+correcto es trabajo de los verificadores oficiales.
 
 Toda entrada y salida es JSON (por archivo con `--in`, o por
 stdin/stdout). Cada operación devuelve sus números y sus motivos;
@@ -84,6 +109,7 @@ export.
 | `run_orchestrator` | corre el orquestador adaptativo | candidatos + config | promovidos, tunelados, mejor GM, meta |
 | `check_integrity` | filtro de integridad obligatorio | evidencia JSON | ok, motivos |
 | `export_module` | exporta e inyecta un módulo al dataset | record promovido | rutas, grafo, código (structure.json + module.py) |
+| `validate_submission` | valida el formato del submission.zip | ruta del ZIP o directorio | ok, motivos, ángulos, claves del NPZ, READY/NOT_CREATED |
 | `promotion_gate` | lo que exige meta_mvp | meta_mvp (+ S) | ratio DQI necesario, S objetivo, GM |
 
 ## Reglas honestas (no negociables)

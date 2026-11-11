@@ -137,6 +137,25 @@ TOOLS = [
         },
     },
     {
+        "name": "validate_submission",
+        "description": ("Valida el formato de un submission.zip (o su "
+                        "directorio): rutas exactas, sin duplicados ni "
+                        "directorio raíz extra, angle_k consecutivos sin "
+                        "huecos, submission.npz con las 6 claves. Fail-closed."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "path": {"type": "string",
+                         "description": "ruta del ZIP o del directorio a validar"},
+                "task_statuses": {"type": "object",
+                                  "description": "estados de los tres verificadores (invsqrt/dqi/dfthcsos), si se quiere la puerta fail-closed completa"},
+                "mode": {"type": "string",
+                         "description": "modo de la puerta: 'full' (por defecto) o 'smoke'"},
+            },
+            "required": ["path"],
+        },
+    },
+    {
         "name": "promotion_gate",
         "description": ("La puerta de promoción: lo que exige meta_mvp "
                         "(ratio DQI necesario, S objetivo) y, con S, la GM."),

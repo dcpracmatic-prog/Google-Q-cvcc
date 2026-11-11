@@ -234,6 +234,28 @@ def promotion_gate(meta_mvp: float = 30.0,
     return out
 
 
+def validate_submission(path: str | Path,
+                        task_statuses: dict[str, str] | None = None,
+                        mode: str = "full") -> dict[str, Any]:
+    """Valida el formato de un submission.zip (o su directorio).
+
+    Entrada: la ruta del ZIP (o del directorio) y, si se dan, los
+    estados de los tres verificadores (para la puerta fail-closed
+    completa). Salida: si el formato pasa, los motivos, y si se
+    puede armar el ZIP (READY solo si la puerta Y el formato pasan).
+    """
+    from .packaging import (submission_ready, validate_submission_dir,
+                            validate_submission_zip)
+    p = Path(path)
+    packaging = (validate_submission_dir(p) if p.is_dir()
+                 else validate_submission_zip(p))
+    out = {"packaging": packaging}
+    if task_statuses is not None:
+        out["submission"] = submission_ready(task_statuses, packaging,
+                                             mode=mode)
+    return out
+
+
 OPERATIONS = {
     "evaluate_candidate": evaluate_candidate,
     "apply_morph_tunnel": apply_morph_tunnel,
@@ -241,5 +263,6 @@ OPERATIONS = {
     "run_orchestrator": run_orchestrator,
     "check_integrity": check_integrity,
     "export_module": export_module,
+    "validate_submission": validate_submission,
     "promotion_gate": promotion_gate,
 }

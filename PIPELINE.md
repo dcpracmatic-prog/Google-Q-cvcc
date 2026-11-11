@@ -101,6 +101,19 @@ tras la compilación pesada. Al terminar, el submission.zip se arma
 solo desde los artefactos `PASS` (fail-closed: solo los tres
 verificadores en modo full lo arman).
 
+### Empaquetado y validación del ZIP (v0.9.0)
+
+El formato oficial vive en el repo (`auto_mvp/packaging.py` y
+SPEC_AUTO_MVP.md), no solo en memoria. `build_submission_zip`
+arma el ZIP con la estructura correcta y lo valida; si no pasa, lo
+borra. `validate_submission_zip` / `validate_submission_dir`
+comprueban: rutas exactas, sin directorio raíz extra, sin
+duplicados, un solo invsqrt y un solo dqi, angle_k consecutivos
+desde 0 sin huecos, y submission.npz con las 6 claves (U, W,
+H2_I, H1_I, Hsym_lower, tree_edges). `submission_ready` da READY
+solo si la puerta fail-closed Y el formato pasan. El validador
+revisa el FORMATO, no el contenido.
+
 ## El ciclo asíncrono (6 h / 24 h)
 
 Kaggle limita la duración de una corrida de notebook, así que el

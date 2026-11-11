@@ -152,6 +152,23 @@ circuito DQI kickmix no es un Bloq de Qualtran.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.9.0** — **Formato del submission.zip y su validador
+  (fail-closed):** el formato oficial ahora vive en el repo
+  (`auto_mvp/packaging.py`, SPEC_AUTO_MVP.md, PIPELINE.md), no
+  solo en memoria (la v0.3.0 falló por duplicados en otras rutas).
+  `validate_submission_zip` / `validate_submission_dir` comprueban:
+  rutas exactas, sin directorio raíz extra, sin duplicados, un
+  solo invsqrt y un solo dqi, angle_k consecutivos desde 0 sin
+  huecos, submission.npz con las 6 claves (U, W, H2_I, H1_I,
+  Hsym_lower, tree_edges). `build_submission_zip` arma el ZIP con
+  la estructura correcta y lo BORRA si no pasa la validación.
+  `submission_ready` da READY solo si la puerta fail-closed (los
+  tres verificadores en modo full) Y el formato pasan. El validador
+  revisa el FORMATO, no el contenido. Operación nueva en la Skill:
+  `validate_submission` (CLI, MCP, tools.py, functions.json: 8
+  operaciones). Verificado con ZIPs reales: el válido pasa, y cada
+  desviación (duplicados, huecos, raíz extra, archivo extra, NPZ
+  sin clave) falla con su motivo. Tests 9/9 nuevos, 97/97 en total.
 - **v0.8.0** — **Dataset de trabajo (exportar e inyectar
   módulos):** el fail-closed sigue intacto para el submission.zip
   final, pero un módulo promovido ya no se queda en un manifiesto

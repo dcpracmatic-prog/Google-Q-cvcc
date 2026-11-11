@@ -105,3 +105,37 @@ el proxy nunca acepta, solo rechaza y ordena.
 | 3. Auditoría | `IntegrityFilter` + veto de salud v0.2.1 |
 | 4. Mutación + CVV | `CvvChain.append` en cada aceptación y cada veto |
 | 5. Convergencia | `Goal`/`GoalTracker` + `Checkpoint.save` en cada mejor verificado |
+
+## Formato del submission.zip (v0.9.0)
+
+El formato oficial (guía VQCC 2026-11-06 + verificadores en disco;
+la v0.3.0 falló por duplicados en otras rutas, así que el formato
+ahora vive en el repo, no solo en memoria). El ZIP lleva,
+directamente en la raíz (sin directorio raíz extra):
+
+```
+invsqrt.kmb  (o invsqrt.kmx, UNO solo)
+dqi.kmb      (o dqi.kmx, UNO solo)
+dfthcsos/
+    angle_k_0.kmb  (o .kmx)
+    angle_k_1.kmb
+    ...            (consecutivos desde 0, SIN huecos)
+    submission.npz (claves: U, W, H2_I, H1_I, Hsym_lower, tree_edges)
+```
+
+Reglas (fail-closed, en `auto_mvp/packaging.py`):
+- Sin directorio raíz extra ni archivos fuera del formato.
+- Sin duplicados (ni el mismo archivo en dos rutas, ni dos entradas
+  con el mismo nombre dentro del ZIP).
+- Exactamente un invsqrt y un dqi (.kmb o .kmx, no los dos).
+- angle_k consecutivos desde 0, sin huecos, uno por índice.
+- submission.npz con las 6 claves (las extra se avisan, no fallan).
+- `build_submission_zip` arma el ZIP con la estructura correcta y
+  lo valida; si no pasa, lo BORRA (no queda un ZIP malo que se
+  pueda enviar por error).
+- `submission_ready` da READY solo si la puerta fail-closed (los
+  tres verificadores en modo full) Y el formato pasan.
+
+El validador revisa el FORMATO, no el contenido: que un circuito
+sea correcto, que la química cumpla sus umbrales o que el S sea
+bueno es trabajo de los verificadores oficiales.

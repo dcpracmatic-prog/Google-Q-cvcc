@@ -1,7 +1,21 @@
-# STATUS.md — estado del repo (v0.8.0, 2026-11-11)
+# STATUS.md — estado del repo (v0.9.0, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v0.9.0 — formato del submission.zip y su validador
+  (fail-closed).** El formato oficial ahora vive en el repo
+  (`auto_mvp/packaging.py`, SPEC_AUTO_MVP.md, PIPELINE.md), no
+  solo en memoria (la v0.3.0 falló por duplicados en otras rutas).
+  `validate_submission_zip` / `validate_submission_dir` comprueban
+  rutas exactas, sin directorio raíz extra, sin duplicados, un
+  solo invsqrt y un solo dqi, angle_k consecutivos desde 0 sin
+  huecos, submission.npz con las 6 claves. `build_submission_zip`
+  arma el ZIP y lo BORRA si no pasa. `submission_ready` da READY
+  solo si la puerta fail-closed Y el formato pasan. El validador
+  revisa el FORMATO, no el contenido. Operación nueva en la Skill:
+  `validate_submission` (8 operaciones). Verificado con ZIPs
+  reales: el válido pasa; cada desviación falla con su motivo.
+  Tests 9/9 nuevos; suite completa 97/97.
 - **v0.8.0 — dataset de trabajo (exportar e inyectar módulos).**
   El fail-closed sigue intacto para el submission.zip final, pero
   un módulo promovido ya no se queda en un manifiesto con métricas

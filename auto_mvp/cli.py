@@ -11,6 +11,7 @@ funciones para ChatGPT/Grok; ver auto_mvp/operations.py):
     run        corre el orquestador adaptativo sobre candidatos + config
     integrity  pasa el filtro de integridad sobre una evidencia
     export     exporta e inyecta un módulo promovido al dataset de trabajo
+    validate   valida el formato de un submission.zip (o su directorio)
     gate       la puerta de promoción (GM, DQI necesario, S objetivo)
     version    la versión del paquete
 
@@ -26,7 +27,8 @@ import sys
 from . import __version__
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          decode_json_config, evaluate_candidate,
-                         export_module, promotion_gate, run_orchestrator)
+                         export_module, promotion_gate, run_orchestrator,
+                         validate_submission)
 
 
 def _load(path: str | None) -> dict:
@@ -76,6 +78,14 @@ def main(argv: list[str] | None = None) -> int:
     x.add_argument("--runs-dir", default=None,
                    help="directorio de runs (si no, temporal)")
 
+    v = add("validate", "valida el formato de un submission.zip")
+    v.add_argument("--path", required=True,
+                   help="ruta del ZIP o del directorio a validar")
+    v.add_argument("--tasks", default=None,
+                   help="estados de los verificadores como JSON "
+                        "(ej. '{\"invsqrt\": \"PASS\", ...}'), si se quiere "
+                        "la puerta fail-closed completa")
+
     g = add("gate", "la puerta de promoción")
     g.add_argument("--meta-mvp", type=float, default=30.0)
     g.add_argument("--S", dest="S", default=None,
@@ -112,6 +122,9 @@ def main(argv: list[str] | None = None) -> int:
             out = check_integrity(_load(args.inp))
         elif args.op == "export":
             out = export_module(_load(args.inp), runs_dir=args.runs_dir)
+        elif args.op == "validate":
+            tasks = json.loads(args.tasks) if args.tasks else None
+            out = validate_submission(args.path, task_statuses=tasks)
         elif args.op == "gate":
             s = json.loads(args.S) if args.S else None
             out = promotion_gate(args.meta_mvp, S=s)

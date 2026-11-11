@@ -47,7 +47,11 @@ from .observer import (AdaptiveObservabilityMembrane, Observer,
                        observe_trials)
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          decode_json_config, evaluate_candidate,
-                         export_module, promotion_gate, run_orchestrator)
+                         export_module, promotion_gate, run_orchestrator,
+                         validate_submission)
+from .packaging import (EXPECTED_NPZ_KEYS, build_submission_zip,
+                        submission_ready, validate_submission_dir,
+                        validate_submission_zip)
 from .orchestrator import AdaptiveOrchestrator, OrchestratorResult
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, pure_advantage,
@@ -58,7 +62,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "0.8.0"
+__version__ = "0.9.0"
 
 __all__ = [
     "Checkpoint",
@@ -90,8 +94,10 @@ __all__ = [
     "AdaptiveOrchestrator", "OrchestratorResult",
     "OPERATIONS", "apply_morph_tunnel", "check_integrity",
     "decode_json_config", "evaluate_candidate", "export_module",
-    "promotion_gate", "run_orchestrator",
+    "promotion_gate", "run_orchestrator", "validate_submission",
     "WorkingDataset", "export_candidate", "render_module",
+    "EXPECTED_NPZ_KEYS", "build_submission_zip", "submission_ready",
+    "validate_submission_dir", "validate_submission_zip",
     "WorkingDataset", "export_candidate", "render_module",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",

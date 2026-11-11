@@ -30,7 +30,8 @@ from auto_mvp.operations import (apply_morph_tunnel as _apply_morph_tunnel,
                                  evaluate_candidate as _evaluate_candidate,
                                  export_module as _export_module,
                                  promotion_gate as _promotion_gate,
-                                 run_orchestrator as _run_orchestrator)
+                                 run_orchestrator as _run_orchestrator,
+                                 validate_submission as _validate_submission)
 
 __all__ = [
     "evaluate_candidate",
@@ -39,6 +40,7 @@ __all__ = [
     "run_orchestrator",
     "check_integrity",
     "export_module",
+    "validate_submission",
     "promotion_gate",
 ]
 
@@ -80,6 +82,13 @@ def export_module(record: dict[str, Any],
                   runs_dir: str | None = None) -> dict[str, Any]:
     """Exporta e inyecta un módulo promovido al dataset de trabajo."""
     return _export_module(record, runs_dir=runs_dir)
+
+
+def validate_submission(path: str,
+                        task_statuses: dict[str, str] | None = None,
+                        mode: str = "full") -> dict[str, Any]:
+    """Valida el formato de un submission.zip (o su directorio)."""
+    return _validate_submission(path, task_statuses=task_statuses, mode=mode)
 
 
 def promotion_gate(meta_mvp: float = 30.0,

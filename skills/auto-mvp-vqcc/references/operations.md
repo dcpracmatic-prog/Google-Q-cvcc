@@ -127,6 +127,31 @@ cargador (`WorkingDataset.load`) devuelve el grafo tunelado
 ejecutable. Esto NO es el submission.zip: ese sigue fail-closed
 (solo los tres verificadores en modo full lo arman).
 
+## validate_submission
+
+Valida el formato de un submission.zip (o su directorio).
+Entrada: la ruta del ZIP y, si se dan, los estados de los tres
+verificadores. Salida: si el formato pasa, los motivos, y si se
+puede armar el ZIP (READY solo si la puerta Y el formato pasan).
+
+```json
+{
+  "packaging": {"ok": true, "reasons": [], "warnings": [],
+                "files": ["dqi.kmb", "dfthcsos/angle_k_0.kmb",
+                          "dfthcsos/angle_k_1.kmb",
+                          "dfthcsos/submission.npz", "invsqrt.kmb"],
+                "angles": 2,
+                "npz_keys": ["H1_I", "H2_I", "Hsym_lower", "U", "W", "tree_edges"],
+                "path": "submission.zip"},
+  "submission": {"status": "READY", "reasons": [], "gate": {...}, "packaging": {...}}
+}
+```
+
+Un ZIP con duplicados (invsqrt.kmb y invsqrt.kmx), con huecos en
+angle_k (0 y 2 sin 1), con directorio raíz extra, o con un NPZ sin
+la clave tree_edges, da `ok: false` con su motivo. El validador
+revisa el FORMATO, no el contenido.
+
 ## promotion_gate
 
 Lo que exige `meta_mvp`. Sin S: `{"meta_mvp": 30.0,
