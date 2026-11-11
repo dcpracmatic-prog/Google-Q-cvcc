@@ -34,12 +34,23 @@ y el verificador nunca se entera de que existió.
 
 ### Fase 2 — Promoción por beneficio real
 
-Solo si la estimación matemática bate el mejor envío se da luz
-verde. La meta por defecto es **GM estimada > 23.94667** (el mejor
-envío 58076483), con la fórmula de ponderación de la competencia:
-media geométrica de (referencia / propio) en las 3 tareas. La
-promoción significa "vale la pena gastar compilación aquí", no "esto
-va a puntuar 23.95": la estimación es una proyección.
+Solo si la estimación matemática alcanza la meta se da luz verde.
+La meta es un parámetro ABSOLUTO (**`meta_mvp`**): el puntaje que
+se le exige al sistema (ej. 30.00), no lo que dictó un envío
+anterior. Sin directiva, la meta por defecto es **GM estimada >
+23.94667** (el mejor envío 58076483). Con directiva, el pipeline
+quema ciclos de búsqueda y prefiltrado hasta alcanzar ese umbral
+o agotar el presupuesto, y para limpio cuando un candidato REAL lo
+alcanza (un target es una hipótesis, no el circuito que entrega el
+puntaje: su promoción no para la búsqueda).
+
+La ventaja pura es la mejora real (Toffolis, cúbits, profundidad
+T) frente al baseline oficial, traducida de forma directa al
+puntaje con la fórmula de la competencia: por tarea, el ratio =
+costo de referencia / costo propio; el puntaje es la media
+geométrica de los tres ratios (`pure_advantage`). La promoción
+significa "vale la pena gastar compilación aquí", no "esto va a
+puntuar 23.95": la estimación es una proyección.
 
 La puerta mide contra los componentes del mejor envío (invsqrt
 propio 20.65x, DQI público 64.76x, química pública 10.27x;
@@ -53,7 +64,8 @@ bajar T un 49.1% (DQI 127.3x con química pública). El mayor peso
 de T está en unextract/unconvert (~43%): ese es el bloque que
 vale la pena atacar. La puerta promueve mejoras pequeñas por
 encima de 23.94667, y solo se envía lo que pasa los tres
-verificadores oficiales.
+verificadores oficiales (puerta fail-closed:
+`numeric_lab.fail_closed_gate`).
 
 ### Fase 3 — Compilación pesada y artefactos
 

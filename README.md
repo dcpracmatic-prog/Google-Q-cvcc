@@ -142,6 +142,23 @@ se inventó nada para tapar el hueco.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.5.0** — **meta_mvp (parámetro absoluto) + ventaja pura:**
+  la lógica de metas acepta `meta_mvp` (el puntaje que se le exige
+  al sistema, ej. 30.00); la barra de parada la dicta ese umbral,
+  no un envío anterior (`Goal.for_meta_mvp`, `PromotionGate(meta_mvp)`,
+  `Pipeline(meta_mvp=...)`, parada por meta solo cuando un candidato
+  REAL alcanza la meta — un target es una hipótesis, no el circuito).
+  `pure_advantage` evalúa la mejora real (Toffolis, cúbits, T) frente
+  al baseline oficial y la traduce al puntaje con la fórmula de la
+  competencia. **Lab incorporado:** `numeric_lab` (port stdlib del
+  prefiltro Chebyshev del Lab: 28 candidatos, 17 factibles, mejor
+  grado 7 / 1 segmento, verificado contra el original numpy) con
+  gancho en el proxy, y `fail_closed_gate` (solo los tres
+  verificadores en modo full arman el submission.zip). **LOGIC_CORE
+  MWIS incorporado** (`mwis.py`, port fiel del núcleo v4): la
+  selección por lado es MWIS con peso = ganancia en S (la unión
+  D, I, G, L, M gana más que el MIS voraz; incluye G_b17). Sin
+  directiva, la puerta sigue promoviendo lo que bate 23.94667.
 - **v0.4.0** — MaxCut (port fiel del C++ de Arturo) partiendo el
   grafo de conflictos; calibración DCP en el pipeline (margen,
   paciencia y presupuesto de la sonda); Observer con régimen

@@ -131,19 +131,36 @@ class MetadataProxy:
     ``margin`` es el margen calibrado: una variante solo se considera
     prometedora si su S estimado baja del mejor S visto por más que
     el margen (igual que la regla de aceptación de v0.2.1).
+    ``numeric_prefilter`` activa el prefiltro en flotante del Lab
+    (numeric_lab): si la variante invsqrt trae "degree" y "segments"
+    en sus métricas y esa combinación no puede pasar 2^-24 ni en
+    flotante, se descarta antes de estimar el costo. Es un filtro
+    barato (una tabla), no un veredicto: pasar el prefiltro no
+    significa que el circuito exista.
     """
 
     def __init__(self, spec: CircuitSpec, hard_caps: dict[str, Any] | None = None,
-                 margin: float = MARGIN_CAP):
+                 margin: float = MARGIN_CAP, numeric_prefilter: bool = False):
         self.spec = spec
         self.hard_caps = dict(hard_caps or {})
         self.margin = margin
+        self.numeric_prefilter = numeric_prefilter
 
     def evaluate(self, meta: CandidateMeta, best_S: float) -> ProxyVerdict:
         reasons: list[str] = []
         if meta.task != self.spec.task:
             return ProxyVerdict("reject", None, self.margin,
                                 [f"tarea {meta.task!r} != {self.spec.task!r}"])
+        # 0. Prefiltro numérico del Lab (invsqrt: grado/segmentos).
+        if (self.numeric_prefilter and meta.task == "invsqrt"
+                and "degree" in meta.metrics and "segments" in meta.metrics):
+            from .numeric_lab import float_pass_table
+            key = (int(meta.metrics["degree"]), int(meta.metrics["segments"]))
+            if not float_pass_table().get(key, False):
+                return ProxyVerdict(
+                    "reject", None, self.margin,
+                    [f"prefiltro numérico: grado {key[0]} / {key[1]} segmentos "
+                     f"no pasa 2^-24 ni en flotante (Lab numeric_lab)"])
         # 1. Restricciones duras: el validador como filtro de entrada.
         max_q = self.hard_caps.get("max_qubits")
         if max_q is not None and meta.total_qubits > max_q:

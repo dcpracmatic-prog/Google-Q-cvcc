@@ -214,8 +214,18 @@ def greedy_mis(nodes: list[str], edges: list[tuple]) -> list[str]:
 
 
 def partition_then_select(nodes: list[str], edges: list[tuple],
-                          seed: int = 101) -> dict:
-    """MaxCut + MIS voraz por lado. Devuelve la partición y los dos MIS."""
+                          seed: int = 101,
+                          gains: dict[str, float] | None = None) -> dict:
+    """MaxCut + selección por lado. Devuelve la partición y los dos conjuntos.
+
+    Con ``gains`` (dS por nodo, la ganancia en S de cada mutación) la
+    selección por lado es MWIS (LOGIC_CORE v4, ``solve_mwis`` con
+    mejora local): maximiza la ganancia TOTAL del conjunto, no su
+    tamaño. Solo entran nodos con ganancia positiva (una mutación
+    que empeora el S nunca ayuda a una combinación: solo añade
+    conflictos). Sin ``gains`` cae al MIS voraz (comportamiento
+    v0.4.0, compatible).
+    """
     part = partition_conflict_graph(nodes, edges, seed=seed)
     edge_set = {(e[0], e[1]) for e in edges} | {(e[1], e[0]) for e in edges}
 
@@ -223,6 +233,30 @@ def partition_then_select(nodes: list[str], edges: list[tuple],
         s = set(side)
         return [(a, b) for (a, b) in edge_set if a in s and b in s and a < b]
 
+    if gains is None:
+        return {"partition": part.as_dict(),
+                "mis_a": greedy_mis(part.side_a, sub_edges(part.side_a)),
+                "mis_b": greedy_mis(part.side_b, sub_edges(part.side_b))}
+
+    from .mwis import solve_mwis
+
+    def mwis_side(side: list[str]) -> list[str]:
+        # Solo nodos con ganancia positiva: el resto nunca ayuda.
+        pos = [name for name in side if gains.get(name, 0.0) > 0]
+        idx = {name: i for i, name in enumerate(pos)}
+        adj: list[set[int]] = [set() for _ in pos]
+        for a, b in sub_edges(pos):
+            adj[idx[a]].add(idx[b])
+            adj[idx[b]].add(idx[a])
+        weights = [float(gains[name]) for name in pos]
+        chosen = solve_mwis(adj, weights, method="local")
+        return [pos[i] for i in sorted(chosen)]
+
     return {"partition": part.as_dict(),
-            "mis_a": greedy_mis(part.side_a, sub_edges(part.side_a)),
-            "mis_b": greedy_mis(part.side_b, sub_edges(part.side_b))}
+            "mis_a": mwis_side(part.side_a),
+            "mis_b": mwis_side(part.side_b)}
+
+
+def mwis_gain(nodes: list[str], gains: dict[str, float]) -> float:
+    """Ganancia total (suma de dS) de un conjunto de nodos."""
+    return float(sum(gains.get(name, 0.0) for name in nodes))

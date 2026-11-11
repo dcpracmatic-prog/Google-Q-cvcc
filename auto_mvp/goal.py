@@ -24,15 +24,40 @@ import math
 import time
 from dataclasses import dataclass, field
 
+from .vqcc.contracts import BEST_SUBMISSION_S, REFERENCE_S
+from .vqcc.costs import ratio
+
+
+def target_S_for_meta_mvp(task: str, meta_mvp: float,
+                          current: dict[str, float] | None = None) -> float:
+    """El S que la tarea debe alcanzar para que el GM sea ``meta_mvp``.
+
+    La meta es ABSOLUTA (el umbral que se le exige al sistema), no la
+    dicta un envío anterior: las demás tareas aportan su componente
+    del mejor envío y esta tarea cubre el resto. Es la fórmula de la
+    competencia (media geométrica de los ratios), despejada.
+    """
+    base = dict(BEST_SUBMISSION_S if current is None else current)
+    others = 1.0
+    for t, s in base.items():
+        if t != task:
+            others *= ratio(t, s)
+    required = meta_mvp ** 3 / others
+    return REFERENCE_S[task] / required
+
 
 @dataclass(frozen=True)
 class Goal:
-    """Meta y regla de paro. Una de las dos formas de meta es obligatoria.
+    """Meta y regla de paro. Una de las tres formas de meta es obligatoria.
 
     target_S: S objetivo (menor es mejor). Si se pasa, manda sobre
         improvement_pct.
     improvement_pct: porcentaje de mejora sobre baseline_S (ej. 50.0
         significa S <= baseline_S / 1.5).
+    meta_mvp: puntaje objetivo ABSOLUTO (la media geométrica de la
+        competencia que se le exige al sistema, ej. 30.00). La barra
+        de parada la dicta este umbral, no un envío anterior. Con
+        ``for_meta_mvp`` se traduce al S objetivo de la tarea.
     baseline_S: S del baseline verificado del que se parte.
     max_trials: techo duro de intentos (el presupuesto adaptativo no
         lo supera).
@@ -47,6 +72,7 @@ class Goal:
     baseline_S: float
     target_S: float | None = None
     improvement_pct: float | None = None
+    meta_mvp: float | None = None
     max_trials: int = 20
     base_trials: int = 10
     growth_per_hit: int = 2
@@ -55,12 +81,26 @@ class Goal:
     deadline_seconds: float | None = None
 
     def __post_init__(self):
-        if self.target_S is None and self.improvement_pct is None:
-            raise ValueError("hay que pasar target_S o improvement_pct")
+        if (self.target_S is None and self.improvement_pct is None
+                and self.meta_mvp is None):
+            raise ValueError("hay que pasar target_S, improvement_pct o meta_mvp")
+        if self.meta_mvp is not None and self.meta_mvp <= 0:
+            raise ValueError("meta_mvp debe ser > 0")
         if self.max_trials < 1 or self.base_trials < 1:
             raise ValueError("trials debe ser >= 1")
         if self.patience < 1:
             raise ValueError("patience debe ser >= 1")
+
+    @classmethod
+    def for_meta_mvp(cls, task: str, meta_mvp: float, baseline_S: float,
+                     current: dict[str, float] | None = None,
+                     **kw) -> "Goal":
+        """Goal con el S objetivo que exige ``meta_mvp`` para ``task``."""
+        if meta_mvp <= 0:
+            raise ValueError("meta_mvp debe ser > 0")
+        return cls(baseline_S=baseline_S, meta_mvp=float(meta_mvp),
+                   target_S=target_S_for_meta_mvp(task, meta_mvp, current),
+                   **kw)
 
     @property
     def effective_target(self) -> float:
@@ -70,6 +110,9 @@ class Goal:
         return self.baseline_S / (1.0 + self.improvement_pct / 100.0)
 
     def target_label(self) -> str:
+        if self.meta_mvp is not None:
+            return (f"meta_mvp={self.meta_mvp:.2f} "
+                    f"(S<={self.effective_target:.6g})")
         if self.target_S is not None:
             return f"S<={self.target_S:.6g}"
         return f"+{self.improvement_pct:.6g}% (S<={self.effective_target:.6g})"

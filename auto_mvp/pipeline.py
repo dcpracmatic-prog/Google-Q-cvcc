@@ -9,12 +9,18 @@ artefacto con nombre:
     milisegundos y descarta millones de combinaciones inviables sin
     instanciar nada pesado. Nada se compila aquí.
   Fase 2 — Promoción por beneficio real. Solo si la estimación
-    matemática alcanza la meta definida (por defecto GM estimada
-    >= 30.00, frente al baseline 1.00) se da luz verde. La puerta
-    usa la fórmula de ponderación de la competencia (media geométrica
-    de los ratios por tarea). La estimación es una PROYECCIÓN: la
-    promoción significa "vale la pena gastar compilación aquí", no
-    "esto va a puntuar 30".
+    matemática alcanza la meta definida se da luz verde. La meta es
+    un parámetro ABSOLUTO (``meta_mvp``): el puntaje que se le exige
+    al sistema (ej. 30.00), no lo que dictó un envío anterior. Si se
+    pide 2, el pipeline poda hasta un circuito que entregue 2; si se
+    pide 30 o 50, quema ciclos de búsqueda y prefiltrado hasta topar
+    con esa meta o agotar el presupuesto. La puerta usa la fórmula
+    de ponderación de la competencia (media geométrica de los ratios
+    por tarea) y evalúa la mejora REAL (Toffolis, cúbits, profundidad
+    T) frente al baseline oficial, traducida de forma directa al
+    puntaje: esa ganancia es la "ventaja pura". La estimación es una
+    PROYECCIÓN: la promoción significa "vale la pena gastar
+    compilación aquí", no "esto va a puntuar 30".
   Fase 3 — Compilación pesada y artefactos. Solo lo promovido llega
     aquí. Se invierten las horas de cómputo y, si el verificador
     oficial lo confirma, se guarda el artefacto en un dataset con
@@ -37,8 +43,13 @@ al envío real. La meta 30.00 NO es alcanzable con el enfoque
 actual (veredicto 2026-11-11, verificado): para 30 el producto debe
 ser 27,000 (30^3) contra 13,732 actual (x1.966); solo por DQI
 habría que bajar T un 49.1% (DQI 127.3x con química pública). Por
-eso la puerta promueve mejoras pequeñas por encima de 23.94667, y
-solo se envía lo que pasa los tres verificadores oficiales.
+eso la puerta, SIN directiva explícita, promueve mejoras pequeñas
+por encima de 23.94667 (``meta_mvp`` por defecto = 23.94667), y
+solo se envía lo que pasa los tres verificadores oficiales
+(puerta fail-closed, ver numeric_lab.fail_closed_gate). Con una
+directiva (ej. meta_mvp=30.00) la barra es ese umbral: el pipeline
+quema ciclos hasta alcanzarlo o agotar el presupuesto, y reporta
+honestamente si la meta quedó sin alcanzar.
 """
 from __future__ import annotations
 
@@ -63,25 +74,41 @@ from .proxy import CandidateMeta, MetadataProxy
 # optimizando aporta su componente del mejor envío.
 CURRENT_BEST_S: dict[str, float] = dict(BEST_SUBMISSION_S)
 
-# La puerta promueve lo que bate el mejor envío. 30.00 no es la meta:
-# con el enfoque actual no es alcanzable (producto 27,000 vs 13,732).
+# Sin directiva explícita, la puerta promueve lo que bate el mejor
+# envío (23.94667). 30.00 no es la meta por defecto: con el enfoque
+# actual no es alcanzable (producto 27,000 vs 13,732).
 PROMOTION_THRESHOLD = BEST_GLOBAL_SCORE
+
+
+def pure_advantage(candidate_S: dict[str, float],
+                   current: dict[str, float] | None = None) -> dict[str, Any]:
+    """La ventaja pura de un candidato frente al baseline oficial.
+
+    Evalúa la mejora REAL (Toffolis, cúbits, profundidad T) que el
+    candidato trae en su tarea, frente al baseline oficial, y la
+    traduce de forma directa al puntaje con la fórmula de la
+    competencia: por tarea, el ratio = costo de referencia / costo
+    propio; el puntaje es la media geométrica de los tres ratios.
+    Devuelve {"ratios": {tarea: ratio}, "gm": puntaje}.
+    """
+    base = dict(CURRENT_BEST_S if current is None else current)
+    base.update(candidate_S)
+    ratios = {t: ratio(t, s) for t, s in base.items()}
+    return {"ratios": ratios, "gm": geometric_score(base)}
 
 
 def promotion_gm(candidate_S: dict[str, float],
                  current: dict[str, float] | None = None) -> float:
     """GM estimada con el candidato en su tarea y los mejores en las demás."""
-    base = dict(CURRENT_BEST_S if current is None else current)
-    base.update(candidate_S)
-    return geometric_score(base)
+    return float(pure_advantage(candidate_S, current)["gm"])
 
 
-def required_dqi_ratio(threshold: float = PROMOTION_THRESHOLD,
+def required_dqi_ratio(meta_mvp: float = PROMOTION_THRESHOLD,
                        current: dict[str, float] | None = None) -> float:
     """El ratio DQI que exige la meta, con las otras tareas en su mejor."""
     base = dict(CURRENT_BEST_S if current is None else current)
     others = ratio("invsqrt", base["invsqrt"]) * ratio("dfthcsos", base["dfthcsos"])
-    return threshold ** 3 / others
+    return meta_mvp ** 3 / others
 
 
 @dataclass
@@ -94,29 +121,36 @@ class GateVerdict:
 
 
 class PromotionGate:
-    """Fase 2: la puerta de promoción por beneficio real."""
+    """Fase 2: la puerta de promoción por beneficio real.
 
-    def __init__(self, threshold: float = PROMOTION_THRESHOLD,
-                 current: dict[str, float] | None = None):
-        self.threshold = threshold
+    ``meta_mvp`` es el parámetro ABSOLUTO que se le exige al sistema
+    (ej. 30.00). Sin directiva, es el mejor envío (23.94667): la
+    puerta promueve lo que lo bate. ``threshold`` es solo el alias
+    histórico de ``meta_mvp``.
+    """
+
+    def __init__(self, meta_mvp: float = PROMOTION_THRESHOLD,
+                 current: dict[str, float] | None = None,
+                 threshold: float | None = None):
+        self.meta_mvp = float(threshold if threshold is not None else meta_mvp)
+        self.threshold = self.meta_mvp  # alias histórico
         self.current = dict(CURRENT_BEST_S if current is None else current)
 
     def evaluate(self, candidate_S: dict[str, float]) -> GateVerdict:
-        scores = dict(self.current)
-        scores.update(candidate_S)
-        ratios = {t: ratio(t, s) for t, s in scores.items()}
-        gm = math.exp(sum(math.log(r) for r in ratios.values()) / len(ratios))
-        req = required_dqi_ratio(self.threshold, self.current)
+        adv = pure_advantage(candidate_S, self.current)
+        ratios = adv["ratios"]
+        gm = adv["gm"]
+        req = required_dqi_ratio(self.meta_mvp, self.current)
         reasons: list[str] = []
-        if gm >= self.threshold:
+        if gm >= self.meta_mvp:
             reasons.append(
-                f"GM estimada {gm:.2f} >= meta {self.threshold:.2f}")
+                f"GM estimada {gm:.2f} >= meta_mvp {self.meta_mvp:.2f}")
         else:
             reasons.append(
-                f"GM estimada {gm:.2f} < meta {self.threshold:.2f}; "
-                f"faltan {self.threshold - gm:.2f} puntos "
+                f"GM estimada {gm:.2f} < meta_mvp {self.meta_mvp:.2f}; "
+                f"faltan {self.meta_mvp - gm:.2f} puntos "
                 f"(DQI necesitaría {req:.0f}x, hoy {ratios.get('dqi', 0):.2f}x)")
-        return GateVerdict(promote=gm >= self.threshold, gm=gm,
+        return GateVerdict(promote=gm >= self.meta_mvp, gm=gm,
                            ratios=ratios, required_dqi_ratio=req,
                            reasons=reasons)
 
@@ -195,6 +229,8 @@ class PipelineResult:
     partition: dict[str, Any] | None = None
     calibration: dict[str, Any] | None = None
     best_gm_by_side: dict[str, float] = field(default_factory=dict)
+    goal_reached: bool = False
+    meta_mvp: float = 0.0
 
 
 class Pipeline:
@@ -244,9 +280,15 @@ class Pipeline:
                  conflict_graph: tuple[list[str], list[tuple]] | None = None,
                  observer: Observer | None = None,
                  observe_every: int = 50,
-                 max_consecutive_compile_failures: int = 3):
+                 max_consecutive_compile_failures: int = 3,
+                 meta_mvp: float | None = None):
         self.proxy = proxy
+        # meta_mvp: la directiva absoluta (ej. 30.00). Si se pasa, manda
+        # sobre la puerta por defecto; si se pasa una puerta, manda ella.
+        if gate is None and meta_mvp is not None:
+            gate = PromotionGate(meta_mvp)
         self.gate = gate or PromotionGate()
+        self.meta_mvp = float(self.gate.meta_mvp)
         self.store = ArtifactStore(runs_dir)
         self.runs_dir = Path(runs_dir)
         self.compile_fn = compile_fn
@@ -256,6 +298,9 @@ class Pipeline:
         self.state = self._load_state()
         self.best_S: dict[str, float] = dict(self.state.get("best_S", {}))
         self.iteration: int = int(self.state.get("iteration", 0))
+        # La clase del mejor (candidate | target): la meta solo la
+        # alcanza un candidato real; un target es una hipótesis.
+        self.best_kind: str = str(self.state.get("best_kind", ""))
         # Calibración DCP: la sonda manda (margen, paciencia, presupuesto).
         self.calibration = calibration
         if probe is not None:
@@ -269,10 +314,13 @@ class Pipeline:
             self.stagnation_limit = None
             self.max_trials_default = None
         # MaxCut: partición del grafo de conflictos (una vez, al inicio).
+        # conflict_graph: (nodos, aristas) o (nodos, aristas, ganancias);
+        # con ganancias la selección por lado es MWIS (v0.5.0).
         self.partition = None
         self.side_of: dict[str, str] = {}
         if conflict_graph is not None:
-            nodes, edges = conflict_graph
+            nodes, edges = conflict_graph[0], conflict_graph[1]
+            gains = conflict_graph[2] if len(conflict_graph) > 2 else None
             self.partition = partition_conflict_graph(nodes, edges)
             for name in self.partition.side_a:
                 self.side_of[name] = "A"
@@ -320,6 +368,7 @@ class Pipeline:
             "iteration": self.iteration,
             "best_S": self.best_S,
             "best_gm": self.state.get("best_gm", 0.0),
+            "best_kind": self.best_kind,
             "best_gm_by_side": self.best_gm_by_side,
             "mode_transitions": self.mode_transitions,
             "source_commit": self.source_commit,
@@ -344,6 +393,7 @@ class Pipeline:
         screened = proxy_rejected = gate_rejected = promoted = 0
         shadow_skipped = 0
         best_gm = float(self.state.get("best_gm", 0.0))
+        best_kind = self.best_kind
         best: dict[str, Any] | None = None
         artifacts: list[str] = []
         stopped = "stream agotado"
@@ -366,6 +416,12 @@ class Pipeline:
                         v >= self.stagnation_limit
                         for v in self.since_improvement_by_side.values()))):
                 stopped = "estancamiento"
+                break
+            # Meta ya alcanzada en una corrida anterior (estado reanudado):
+            # solo cuenta si el mejor era un candidato real, no un target.
+            if best_gm >= self.gate.meta_mvp and best_kind == "candidate":
+                stopped = (f"meta alcanzada: GM {best_gm:.2f} >= "
+                           f"meta_mvp {self.gate.meta_mvp:.2f}")
                 break
             self.iteration += 1
             run_count += 1
@@ -397,6 +453,8 @@ class Pipeline:
             improved = gate_v.gm > best_gm
             if improved:
                 best_gm = gate_v.gm
+                best_kind = kind
+                self.best_kind = kind
                 since_improvement = 0
                 best = {"iteration": self.iteration, "gm": gate_v.gm,
                         "S": cand_S, "ratios": gate_v.ratios,
@@ -454,6 +512,15 @@ class Pipeline:
                                 f"{self._consecutive_compile_failures} veces seguidas")
             if self.observer is not None and self.iteration % self.observe_every == 0:
                 self._observe()
+            # Parada por meta: la barra la dicta meta_mvp, no el flujo.
+            # Solo un CANDIDATO real (un circuito/módulo) alcanza la
+            # meta: un target es una hipótesis paramétrica (vale la
+            # pena compilarla, pero no es el circuito que entrega el
+            # puntaje), así que su promoción no para la búsqueda.
+            if best_gm >= self.gate.meta_mvp and best_kind == "candidate":
+                stopped = (f"meta alcanzada: GM {best_gm:.2f} >= "
+                           f"meta_mvp {self.gate.meta_mvp:.2f}")
+                break
         self._observe()
         self.state["best_gm"] = best_gm
         self._save_state()
@@ -467,4 +534,7 @@ class Pipeline:
             last_observation=self.last_observation,
             partition=(self.partition.as_dict() if self.partition else None),
             calibration=(self.calibration.as_dict() if self.calibration else None),
-            best_gm_by_side=dict(self.best_gm_by_side))
+            best_gm_by_side=dict(self.best_gm_by_side),
+            goal_reached=(best_gm >= self.gate.meta_mvp
+                          and best_kind == "candidate"),
+            meta_mvp=self.gate.meta_mvp)
