@@ -7,7 +7,10 @@ con los umbrales exactos del verificador oficial. Nada de HTTP.
 Fuentes (verificadas en el workspace):
 - invsqrt: workspace/sandbox-run/competition-verifiers/invsqrt/verify_submission_invsqrt.py
   tol(x) = 2^-24 * beta / sqrt(x), x en [1, 3_133_452], width 22, beta=1,
-  S = Q * C, C = Toffoli + T/4.
+  S = Q * C, C = Toffoli + T/4, con T INCLUYENDO la síntesis de
+  rotaciones (v0.9.1): cada rotación Z_POW fina suma
+  rotation_t_count(eps) = 0.56*log2(1/eps) + 5.3 T, con eps sacado
+  del margen de tolerancia que deja la aproximación.
 - DQI: workspace/sandbox-run/competition-verifiers/dqi/verify_submission_dqi.py
   m=4095, n=70, grado 12, r=2016, eps+ < 1/16 (Clopper-Pearson, log2_delta=-128),
   S = R(eps+) * Q^2 * T, R = ln2 / -ln(1/2 + 2*sqrt(eps)).
@@ -139,7 +142,8 @@ def invsqrt_spec() -> CircuitSpec:
             "max_x": INVSQRT_MAX_X,
             "width": INVSQRT_WIDTH,
             "beta": INVSQRT_BETA,
-            "formula": "S = Q * C, C = Toffoli + T/4",
+            "formula": ("S = Q * C, C = Toffoli + T/4, con T incluyendo "
+                        "la síntesis de rotaciones (v0.9.1)"),
         },
         baseline_S=BEST_OWN_S["invsqrt"],
         intent="Fase beta/sqrt(x) con tol 2^-24*beta/sqrt(x) para todo x; bajar S=Q*C.",

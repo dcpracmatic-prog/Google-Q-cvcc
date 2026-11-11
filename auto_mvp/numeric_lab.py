@@ -177,6 +177,20 @@ def float_pass_table() -> dict[tuple[int, int], bool]:
             for r in lab["candidates"]}
 
 
+def rel_error_for(degree: int, segments: int) -> float | None:
+    """El e1 (error relativo máximo tras NR) de un (grado, segmentos).
+
+    Es el margen que la aproximación deja para la síntesis de
+    rotaciones: el proxy lo usa para cobrar ese costo en el S de
+    invsqrt (v0.9.1). None si esa combinación no está en la tabla.
+    """
+    lab = numeric_lab()
+    for r in lab["candidates"]:
+        if r["degree"] == degree and r["segments"] == segments:
+            return float(r["after_NR_float_relative_error"])
+    return None
+
+
 def fail_closed_gate(task_statuses: dict[str, str],
                      mode: str = "full") -> dict[str, str]:
     """Puerta de envío fail-closed del Lab.

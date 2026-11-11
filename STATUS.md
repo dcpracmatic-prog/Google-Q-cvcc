@@ -1,7 +1,21 @@
-# STATUS.md — estado del repo (v0.9.0, 2026-11-11)
+# STATUS.md — estado del repo (v0.9.1, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v0.9.1 — la síntesis de rotaciones en el costo invsqrt
+  (fail-closed).** El proxy ya no ignora el costo de síntesis de
+  rotaciones Z_POW finas: la fórmula es la del verificador oficial
+  (`rotation_t_count(eps) = 0.56*log2(1/eps) + 5.3`, idéntica a la
+  del verificador, verificada contra su archivo). El eps sale del
+  margen de tolerancia que deja la aproximación (cota inferior
+  `(2^-24 - rel_error) / sqrt(3,133,452)`; el e1 sale de la tabla
+  del Lab cuando el candidato trae grado/segmentos). Con 37
+  rotaciones y el e1 del mejor prefiltro, la referencia da
+  S 2,077,168.5, a 0.019% del S oficial 2,076,774 (sin la síntesis
+  daría 2,011,100, un 3.2% por debajo). Rotaciones sin rel_error,
+  o rel_error >= 2^-24, se rechazan (fail-closed). El module.py
+  exportado usa la misma fórmula. Sin rotaciones, la fórmula es
+  la de siempre. Tests 7/7 nuevos; suite completa 104/104.
 - **v0.9.0 — formato del submission.zip y su validador
   (fail-closed).** El formato oficial ahora vive en el repo
   (`auto_mvp/packaging.py`, SPEC_AUTO_MVP.md, PIPELINE.md), no

@@ -1,6 +1,6 @@
 # Operaciones de la skill auto-mvp-vqcc
 
-Las 6 operaciones reales del repo (`auto_mvp/operations.py`). Todas
+Las 8 operaciones reales del repo (`auto_mvp/operations.py`). Todas
 reciben y devuelven JSON. El punto de entrada es el mismo por CLI
 (`python -m auto_mvp.cli <op>`), MCP (`tools/call`) y funciones
 (`tools.py` / `functions.json`).
@@ -29,7 +29,11 @@ Salida (medida):
 Límites: el proxy rechaza si el S no baja del mejor más que el
 margen (el BM+Forney, S 3.714e12, no pasa con best_S 3.714e12 y
 margen 0.10). No guarda artefactos; no verifica por simulación
-(eso es la fase 3, `run` con `compile_fn`).
+(eso es la fase 3, `run` con `compile_fn`). Desde v0.9.1, el S de
+invsqrt incluye la síntesis de rotaciones (fórmula del verificador
+oficial): un candidato invsqrt con rotaciones debe traer
+`rotations` y `rel_error` (o `degree`/`segments`, y el e1 sale de
+la tabla del Lab); sin rel_error el proxy lo rechaza.
 
 ## apply_morph_tunnel
 

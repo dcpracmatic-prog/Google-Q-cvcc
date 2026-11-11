@@ -101,7 +101,21 @@ def compute_S(task, metrics):
     if task == "dqi":
         return repetition_overhead(metrics["eps_plus"]) * metrics["Q"] ** 2 * metrics["T"]
     if task == "invsqrt":
-        return metrics["Q"] * (metrics.get("toffoli", 0) + metrics.get("t_count", 0) / 4.0)
+        # v0.9.1: T incluye la síntesis de rotaciones (la fórmula del
+        # verificador oficial). El margen es la cota inferior que
+        # deja el rel_error: (2^-24 - rel_error) / sqrt(x_max).
+        t_total = metrics.get("t_count", 0)
+        n_rot = metrics.get("rotations", 0)
+        if n_rot:
+            rel_error = metrics.get("rel_error")
+            if rel_error is None:
+                raise ValueError("rotations > 0 sin rel_error")
+            margin = (2.0 ** -24 - rel_error) / 3133452.0 ** 0.5
+            if not margin > 0:
+                raise ValueError("sin tolerancia para la síntesis de rotaciones")
+            eps = 3.141592653589793 * margin / n_rot
+            t_total += n_rot * (0.56 * math.log2(1.0 / eps) + 5.3)
+        return metrics["Q"] * (metrics.get("toffoli", 0) + t_total / 4.0)
     if task == "dfthcsos":
         return metrics["lambda_eff"] * metrics["Ttot"] * metrics["Qtot"]
     raise ValueError(f"tarea desconocida: {task!r}")

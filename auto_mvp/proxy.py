@@ -43,8 +43,11 @@ class CandidateMeta:
 
     task: 'invsqrt' | 'dqi' | 'dfthcsos'.
     metrics: los números que pide la fórmula de S de su tarea
-        (DQI: Q, T, eps_plus; invsqrt: Q, toffoli, t_count; química:
-        lambda_eff, Ttot, Qtot). Pueden ser estimados, no medidos.
+        (DQI: Q, T, eps_plus; invsqrt: Q, toffoli, t_count, y
+        rotations + rel_error si el circuito tiene rotaciones Z_POW
+        finas (v0.9.1: sin rel_error no se puede cobrar la síntesis
+        y el proxy lo rechaza); química: lambda_eff, Ttot, Qtot).
+        Pueden ser estimados, no medidos.
     register_widths: ancho en qubits por registro (ej. {"S": 840,
         "C": 432, "B": 432}).
     gate_density: Toffolis estimados por unidad que se quiera auditar
@@ -101,7 +104,17 @@ def estimate_S(meta: CandidateMeta) -> float:
     if meta.task == "dqi":
         return s_dqi(m["Q"], m["T"], m["eps_plus"])
     if meta.task == "invsqrt":
-        return s_invsqrt(m["Q"], m.get("toffoli", 0), m.get("t_count", 0))
+        # v0.9.1: el costo incluye la síntesis de rotaciones (la
+        # fórmula del verificador oficial). El rel_error es el e1
+        # del prefiltro: si el candidato trae grado/segmentos y no
+        # trae rel_error, se saca de la tabla del Lab.
+        rel_error = m.get("rel_error")
+        if rel_error is None and "degree" in m and "segments" in m:
+            from .numeric_lab import rel_error_for
+            rel_error = rel_error_for(int(m["degree"]), int(m["segments"]))
+        return s_invsqrt(m["Q"], m.get("toffoli", 0), m.get("t_count", 0),
+                         rotations=m.get("rotations", 0),
+                         rel_error=rel_error)
     if meta.task == "dfthcsos":
         return s_chem(m["lambda_eff"], m["Ttot"], m["Qtot"])
     raise ValueError(f"tarea desconocida: {meta.task!r}")

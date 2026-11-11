@@ -54,7 +54,11 @@ puntuar 23.95": la estimación es una proyección.
 
 La puerta mide contra los componentes del mejor envío (invsqrt
 propio 20.65x, DQI público 64.76x, química pública 10.27x;
-producto 13,732), no contra los propios. Batir el envío exige
+producto 13,732), no contra los propios. El invsqrt propio
+100,568.5 es medido por el verificador oficial, que ya cobra la
+síntesis de rotaciones; el costo del proxy también la cobra desde
+v0.9.1 (`rotation_t_count(eps) = 0.56*log2(1/eps) + 5.3` con eps
+sacado del margen que deja el rel_error). Batir el envío exige
 DQI ~64.76x, es decir, batir el DQI público (S < 3.7676e11).
 
 La meta 30.00 NO es alcanzable con el enfoque actual (veredicto
