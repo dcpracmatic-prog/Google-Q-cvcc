@@ -32,6 +32,10 @@ from .maxcut import (Partition, greedy_mis, morph as maxcut_morph,
                      exact as maxcut_exact, make_graph as maxcut_graph,
                      mwis_gain, partition_conflict_graph,
                      partition_then_select)
+from .json_directive import (ALL_METHODS, METHODS, STEPS, Directive,
+                             load_plan, parse_directive)
+from .morph_tunnel import (DQI_R, RULES, ReplacementRule, TunnelMove,
+                           TunnelResult, tunnel)
 from .mvp import AutoMvp, MvpResult
 from .mwis import (classify_states, exact_mwis, greedy_mwis,
                    is_independent, one_to_two_improve, solve_mwis,
@@ -40,13 +44,17 @@ from .numeric_lab import (NUMERIC_WARNING, fail_closed_gate,
                           float_pass_table, numeric_lab)
 from .observer import (AdaptiveObservabilityMembrane, Observer,
                        observe_trials)
+from .orchestrator import AdaptiveOrchestrator, OrchestratorResult
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, pure_advantage,
                        required_dqi_ratio)
 from .proxy import (CandidateMeta, MetadataProxy, ProxyVerdict,
                     calibrate_proxy, estimate_S, proxy_merit)
+from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
+                              from_qualtran_bloq)
+from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "0.5.0"
+__version__ = "0.6.0"
 
 __all__ = [
     "Checkpoint",
@@ -69,6 +77,13 @@ __all__ = [
     "NUMERIC_WARNING", "fail_closed_gate", "float_pass_table", "numeric_lab",
     "AdaptiveObservabilityMembrane", "Observer", "observe_trials",
     "AutoMvp", "MvpResult",
+    "QUALTRAN_VERSION", "Block", "CallGraph", "from_qualtran_bloq",
+    "DQI_R", "RULES", "ReplacementRule", "TunnelMove", "TunnelResult",
+    "tunnel",
+    "ALL_METHODS", "METHODS", "STEPS", "Directive", "load_plan",
+    "parse_directive",
+    "DEFAULT_STEPS", "StepPlan",
+    "AdaptiveOrchestrator", "OrchestratorResult",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
     "__version__",

@@ -281,8 +281,13 @@ class Pipeline:
                  observer: Observer | None = None,
                  observe_every: int = 50,
                  max_consecutive_compile_failures: int = 3,
-                 meta_mvp: float | None = None):
+                 meta_mvp: float | None = None,
+                 tunnel_engine: Any | None = None):
         self.proxy = proxy
+        # Motor de tunelamiento MORPH (v0.6.0): si se pasa, el paso
+        # "tunnel" del orquestador adaptativo lo usa para transformar
+        # candidatos antes (o después) de la puerta.
+        self.tunnel_engine = tunnel_engine
         # meta_mvp: la directiva absoluta (ej. 30.00). Si se pasa, manda
         # sobre la puerta por defecto; si se pasa una puerta, manda ella.
         if gate is None and meta_mvp is not None:
@@ -340,6 +345,102 @@ class Pipeline:
             self.state.get("mode_transitions", []))
         self._consecutive_compile_failures = 0
         self.max_consecutive_compile_failures = max_consecutive_compile_failures
+
+    def tunnel_candidate(self, candidate: dict[str, Any],
+                         method: str = "greedy") -> tuple[dict[str, Any], Any | None]:
+        """Paso "tunnel": tunela el candidato si trae un grafo de llamadas.
+
+        El candidato trae su grafo en ``candidate["call_graph"]``
+        (un CallGraph o su dict). Si el motor no está configurado o
+        el candidato no trae grafo, devuelve el candidato tal cual y
+        None. Si el túnel baja el T, actualiza las métricas del
+        candidato (Q, T) con el costo tunelado y devuelve el
+        resultado del túnel.
+        """
+        from .morph_tunnel import tunnel as morph_tunnel
+        from .qualtran_bridge import CallGraph
+        if self.tunnel_engine is None:
+            return candidate, None
+        raw = candidate.get("call_graph")
+        if raw is None:
+            return candidate, None
+        graph = raw if isinstance(raw, CallGraph) else CallGraph.from_dict(raw)
+        rules = self.tunnel_engine if isinstance(self.tunnel_engine, list) \
+            else getattr(self.tunnel_engine, "rules", None) or []
+        res = morph_tunnel(graph, rules, method=method)
+        if res.final_T is None or res.baseline_T is None \
+                or res.final_T >= res.baseline_T or not res.moves:
+            return candidate, res
+        new = dict(candidate)
+        meta = candidate.get("meta")
+        metrics = dict(candidate.get("metrics", {}))
+        if res.final_Q is not None:
+            metrics["Q"] = res.final_Q
+        metrics["T"] = res.final_T
+        if isinstance(meta, dict):
+            new_meta = dict(meta)
+            new_meta["metrics"] = dict(new_meta.get("metrics", {}))
+            if res.final_Q is not None:
+                new_meta["metrics"]["Q"] = res.final_Q
+            new_meta["metrics"]["T"] = res.final_T
+            new["meta"] = new_meta
+        elif meta is not None:
+            from .proxy import CandidateMeta
+            new["meta"] = CandidateMeta(
+                task=meta.task, metrics=dict(metrics),
+                register_widths=dict(getattr(meta, "register_widths", {})),
+                gate_density=getattr(meta, "gate_density", None),
+                topology=dict(getattr(meta, "topology", {})))
+        new["metrics"] = metrics
+        new["tunnel"] = res.as_dict()
+        return new, res
+
+    def proxy_eval(self, candidate: dict[str, Any]) -> tuple[Any, float | None]:
+        """Fase 1 (extraída para el orquestador): proxy + S estimado."""
+        from .proxy import CandidateMeta, estimate_S
+        meta = candidate.get("meta")
+        if isinstance(meta, dict):
+            meta = CandidateMeta(**meta)
+        best_task_S = self.best_S.get(meta.task, CURRENT_BEST_S[meta.task])
+        verdict = self.proxy.evaluate(meta, best_task_S)
+        est = None
+        if verdict.ok:
+            est = verdict.s_estimate if verdict.s_estimate is not None \
+                else estimate_S(meta)
+        return verdict, est
+
+    def promote_and_compile(self, record: dict[str, Any],
+                            trial: dict[str, Any]) -> tuple[str | None, bool]:
+        """Fase 3 (extraída para el orquestador): artefacto + compilación.
+
+        Devuelve (ruta del artefacto o None, shadow_skipped). En
+        SHADOW no se guarda nada; en PROPOSE se guarda sin compilar;
+        en AUTO se compila con compile_fn y el modo baja si falla
+        3 veces seguidas (la gobernanza vive aquí, no en MORPH).
+        """
+        if self.mode == Autonomy.SHADOW:
+            return None, True
+        dest = self.store.save(record["iteration"], record["gm"], record)
+        if self.mode == Autonomy.PROPOSE:
+            return str(dest), False
+        if self.compile_fn is not None:
+            try:
+                measured = self.compile_fn(record)
+            except Exception as e:  # el gancho falló: se cuenta, no se muere
+                measured = {"official_pass": False, "error": str(e)}
+            if measured is not None:
+                self.store.mark_compiled(dest, measured)
+                if measured.get("official_pass"):
+                    self._consecutive_compile_failures = 0
+                else:
+                    trial["compile_failed"] = True
+                    self._consecutive_compile_failures += 1
+                    if (self._consecutive_compile_failures
+                            >= self.max_consecutive_compile_failures):
+                        self._drop_mode(
+                            f"compilación falló "
+                            f"{self._consecutive_compile_failures} veces seguidas")
+        return str(dest), False
 
     def _drop_mode(self, reason: str) -> None:
         order = [Autonomy.AUTO, Autonomy.PROPOSE, Autonomy.SHADOW]
@@ -482,34 +583,14 @@ class Pipeline:
                       "meta": candidate.get("meta"),
                       "metrics": candidate.get("metrics", {}),
                       "source_commit": self.source_commit}
-            if self.mode == Autonomy.SHADOW:
-                # SHADOW: se sigue evaluando pero no se cambia nada.
+            dest, shadow = self.promote_and_compile(record, trial)
+            if shadow:
                 shadow_skipped += 1
                 if self.observer is not None and self.iteration % self.observe_every == 0:
                     self._observe()
                 continue
-            dest = self.store.save(self.iteration, gate_v.gm, record)
-            artifacts.append(str(dest))
-            if self.mode == Autonomy.PROPOSE:
-                # PROPOSE: se registra, no se compila.
-                pass
-            elif self.compile_fn is not None:
-                try:
-                    measured = self.compile_fn(record)
-                except Exception as e:  # el gancho falló: se cuenta, no se muere
-                    measured = {"official_pass": False, "error": str(e)}
-                if measured is not None:
-                    self.store.mark_compiled(dest, measured)
-                    if measured.get("official_pass"):
-                        self._consecutive_compile_failures = 0
-                    else:
-                        trial["compile_failed"] = True
-                        self._consecutive_compile_failures += 1
-                        if (self._consecutive_compile_failures
-                                >= self.max_consecutive_compile_failures):
-                            self._drop_mode(
-                                f"compilación falló "
-                                f"{self._consecutive_compile_failures} veces seguidas")
+            if dest is not None:
+                artifacts.append(dest)
             if self.observer is not None and self.iteration % self.observe_every == 0:
                 self._observe()
             # Parada por meta: la barra la dicta meta_mvp, no el flujo.

@@ -118,10 +118,20 @@ Solo stdlib: no hay dependencias.
 
 ## Qué NO está implementado (a propósito)
 
-Ver `SPEC_AUTO_MVP.md`: motor morfogenético, tensor TERM_U con
-atractor y entrenamiento algebraico implícito no tienen fórmula ni
-algoritmo en la especificación, así que no se construyeron. Tampoco
-se inventó nada para tapar el hueco.
+Ver `SPEC_AUTO_MVP.md`: el tensor TERM_U con atractor y el
+entrenamiento algebraico implícito no tienen fórmula ni algoritmo
+en la especificación, así que no se construyeron. Tampoco se
+inventó nada para tapar el hueco.
+
+**Corrección v0.6.0 (Arturo, 2026-11-11):** el motor
+morfogenético y el decodificador de JSON SÍ se construyeron, porque
+la formalización algorítmica que les faltaba es Qualtran (Bloqs,
+grafo de llamadas, T/Q como cantidades de primera clase), no una
+fórmula por inventar. Quedaron en `qualtran_bridge.py`,
+`morph_tunnel.py`, `json_directive.py`, `step_plan.py` y
+`orchestrator.py`. Lo que Qualtran NO cubre se dice con el dato
+(ver STATUS.md): no demuestra equivalencia entre Bloqs, y el
+circuito DQI kickmix no es un Bloq de Qualtran.
 
 ## Versiones
 
@@ -142,6 +152,24 @@ se inventó nada para tapar el hueco.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v0.6.0** — **Capa de adaptación dinámica (MORPH + JSON +
+  orquestador adaptativo):** la formalización algorítmica es
+  Qualtran. `qualtran_bridge` extrae el grafo de llamadas de un
+  Bloq real (verificado: Toffoli T=4 Q=3; Add(QUInt(4)) T=12 Q=8,
+  And 3+3 + CNOT 15) con T/Q como cantidades de primera clase.
+  `morph_tunnel` reordena y reemplaza BLOQUES sobre ese grafo
+  (reglas con evidencia medida: Chien→Montgomery b=17, T 1,511,522
+  → 1,315,731; multiplicador Toom-3→Toom-4, S 1.99836e13 →
+  1.923348e13). `json_directive` lee JSON con directivas en lenguaje
+  natural (vocabulario controlado, determinista; lo que no encaja se
+  reporta, nunca se tira). `step_plan` es el plan de pasos
+  reprogramable en caliente (reordenar, reemplazar métodos, insertar,
+  quitar, con log). `orchestrator` (AdaptiveOrchestrator) lee el
+  JSON, reordena pasos, adapta metodologías en caliente y ejecuta
+  iteraciones inteligentes: con túnel antes del proxy, el candidato
+  BM+Forney pasa el proxy y promueve (GM ~11.7 con meta 2.0); con
+  túnel después, el proxy lo rechaza. Tests 20/20 nuevos, 70/70
+  en total.
 - **v0.5.0** — **meta_mvp (parámetro absoluto) + ventaja pura:**
   la lógica de metas acepta `meta_mvp` (el puntaje que se le exige
   al sistema, ej. 30.00); la barra de parada la dicta ese umbral,

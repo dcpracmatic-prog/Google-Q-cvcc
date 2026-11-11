@@ -123,3 +123,50 @@ print(res.promoted, res.best_gm, res.artifacts, res.stopped)
 El flujo de candidatos lo da el proponente (el lazo no inventa
 mutaciones). Para reanudar, basta construir otro `Pipeline` con el
 mismo `runs_dir`: lee `state.json` y sigue.
+
+## Capa de adaptación dinámica (v0.6.0)
+
+El pipeline no se limita a pruebas fijas y paramétricas. La
+formalización algorítmica es Qualtran (Bloqs, grafo de llamadas,
+T/Q como cantidades de primera clase), y sobre ella opera la capa
+adaptativa:
+
+- **Tunelamiento MORPH** (`morph_tunnel`): reordena y reemplaza
+  BLOQUES del grafo de llamadas, no solo números. Un túnel es un
+  salto en el paisaje de costo (ej. Chien → Montgomery b=17:
+  T 1,511,522 → 1,315,731, medido). Cada regla trae su evidencia
+  medida; una regla sin evidencia no se aplica.
+- **Decodificador JSON** (`json_directive`): lee configuraciones
+  JSON con directivas en lenguaje natural ("sube la meta a 30",
+  "ataca unextract", "reordena tunnel antes que gate") y las
+  traduce a operaciones. Vocabulario controlado y determinista;
+  lo que no encaja se reporta, nunca se tira en silencio.
+- **Plan de pasos** (`step_plan`): la lista ordenada de pasos
+  (tunnel, proxy, gate, compile, observe, calibrate, search,
+  verify), reprogramable en caliente con log de cada cambio.
+- **Orquestador adaptativo** (`orchestrator`): ejecuta el plan por
+  candidato y aplica las directivas JSON entre iteraciones. El
+  orden importa: con túnel antes del proxy, un candidato que el
+  proxy rechazaría se tunela primero y pasa; con túnel después,
+  solo se tunelan los promovidos.
+
+```python
+from auto_mvp import (AdaptiveOrchestrator, MetadataProxy, Pipeline,
+                      PromotionGate, StepPlan, load_plan)
+from auto_mvp.vqcc import dqi_spec
+
+cfg = load_plan({"meta_mvp": 30.0,
+                 "directives": ["ataca unextract",
+                                "reordena tunnel antes que gate"]})
+pipe = Pipeline(MetadataProxy(dqi_spec(), margin=0.10),
+                PromotionGate(cfg["meta_mvp"]), runs_dir="runs")
+orch = AdaptiveOrchestrator(pipe, StepPlan())
+res = orch.run(mi_flujo, directives=cfg["directives"])
+print(res.promoted, res.best_gm, res.tunneled, res.reprogrammings)
+```
+
+La gobernanza no cambia: el modo AUTO→PROPOSE→SHADOW y el
+Observer (solo observa) viven en el Pipeline; el orquestador no
+veta nada, solo reordena y adapta. Ver STATUS.md para lo que
+Qualtran NO cubre (equivalencia entre Bloqs, DQI kickmix como
+Bloq) y lo que quedó sin cablear (`search`).
