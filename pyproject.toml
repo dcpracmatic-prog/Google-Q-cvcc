@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "auto-mvp"
+version = "0.3.0"
+description = "Núcleo autónomo de optimización para VQCC: corrector con filtro de integridad, bitácora CVV, checkpoint y meta con regla de paro"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "Apache-2.0"}
+authors = [{name = "Arturo Salvador Balderas Hernández"}]
+dependencies = []
+
+[project.optional-dependencies]
+dev = []
+
+[tool.setuptools.packages.find]
+include = ["auto_mvp*"]

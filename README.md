@@ -1,0 +1,110 @@
+# AUTO_MVP — núcleo autónomo de optimización para VQCC
+
+Optimización de circuitos para la competencia Google Quantum AI —
+Verifiable Quantum Circuit Compilation (VQCC), con la lección del
+paso 51 como regla: **ninguna reducción de recursos puede romper la
+equivalencia lógica**.
+
+> **Repo privado mientras la competencia esté abierta.** El trabajo
+> VQCC no se publica hasta que Arturo decida el momento estratégico.
+
+## Qué es
+
+AUTO_MVP v0.3.0 es el corrector v0.2.1-vqcc con tres piezas nuevas
+que la especificación AUTO_MVP v0.0.1 pedía y que sí se pueden
+construir:
+
+| Pieza | Qué hace | Módulo |
+|---|---|---|
+| Filtro de integridad | Revisa sigma, C/B, dreg, alpha y temporales por candidato; veta la regresión con forma de paso 51 aunque tenga mejor S | `auto_mvp/integrity.py` |
+| Bitácora CVV | Cadena de hashes de los récords (tamper-evident, no firma) | `auto_mvp/cvv.py` |
+| Checkpoint | Guarda de inmediato cada mejor verificado (escritura atómica) | `auto_mvp/checkpoint.py` |
+| Meta con regla de paro | Meta en S o en %, presupuesto que crece solo con mejoras, paro con motivo | `auto_mvp/goal.py` |
+| Proxy de metadatos | Criba variantes por anchos, densidades y topes antes de construir | `auto_mvp/proxy.py` |
+| Orquestador | El ciclo de 5 fases sobre los componentes v0.2.1 | `auto_mvp/mvp.py` |
+
+El mérito de aceptación es siempre el **S oficial** (DQI: R·Q²·T;
+invsqrt: Q·C; química: λ_eff·T·Q). La suma ponderada de la
+especificación (α·Q²+β·Toffoli+γ·T) solo existe como `proxy_merit`:
+ordena, nunca decide.
+
+## Estructura
+
+```
+auto_mvp/
+  healing/        paquete genérico de auto-reparación v0.1.0 (intacto)
+  vqcc/           harness v0.2.1: contratos, costos, detector,
+                  verificador local, ledger, búsqueda, calibración
+  integrity.py    filtro + guardia de construcción (NUEVO v0.3.0)
+  cvv.py          cadena de hashes CVV (NUEVO)
+  checkpoint.py   checkpoint atómico (NUEVO)
+  goal.py         meta y regla de paro (NUEVO)
+  proxy.py        proxy de metadatos (NUEVO)
+  mvp.py          orquestador AUTO_MVP (NUEVO)
+tests/            4/4 humo + 5/5 harness + 9/9 v0.2.1 + nuevos v0.3.0
+examples/         ejemplo_searchloop_v021.py, ejemplo_auto_mvp_v030.py
+SPEC_AUTO_MVP.md  la especificación v0.0.1 y qué se implementó de ella
+```
+
+## Uso rápido
+
+```python
+from auto_mvp import AutoMvp, Goal, MetadataProxy
+from auto_mvp.vqcc import dqi_spec
+
+spec = dqi_spec()
+goal = Goal(baseline_S=spec.baseline_S, improvement_pct=50.0,
+            base_trials=10, max_trials=20, patience=5)
+proxy = MetadataProxy(spec, hard_caps={"max_qubits": 2000}, margin=0.10)
+mvp = AutoMvp(spec, mi_proponente, goal, proxy=proxy, workdir="./run1")
+res = mvp.run()
+print(res.best_S, res.integrity_vetoes, res.proxy_rejected, res.stop_reason)
+```
+
+El proponente es un protocolo: recibe el spec, el mejor candidato y
+la evidencia, y devuelve un candidato (dict con `metrics`, y
+opcionalmente `integrity` y `meta`). El lazo no inventa mutaciones.
+
+## Correr los tests
+
+```bash
+python3 -m pytest tests/ -q
+# o sin pytest:
+python3 tests/test_auto_mvp_v030.py
+python3 examples/ejemplo_auto_mvp_v030.py
+```
+
+Solo stdlib: no hay dependencias.
+
+## Reglas honestas
+
+- **Proyectado no es medido.** El cribado por costo guía la
+  búsqueda; solo el verificador oficial corona un mejor verificado.
+  `best_S` y `best_verified_S` viven por separado.
+- **Sin evidencia no hay verificación.** Un candidato con circuito
+  real debe traer evidencia de integridad; sin ella solo puede ser
+  mejor proyectado.
+- **El CVV no es una firma.** Es una cadena de hashes: detecta que
+  alguien alteró un récord, no prueba quién lo escribió.
+- **El proxy no acepta.** Rechaza lo inviable y ordena el resto;
+  la aceptación la deciden el verificador y el filtro de integridad.
+- **El filtro envuelve la construcción.** El paso 51 nunca pasó por
+  el lazo de búsqueda; por eso la guardia vive en el constructor.
+
+## Qué NO está implementado (a propósito)
+
+Ver `SPEC_AUTO_MVP.md`: motor morfogenético, tensor TERM_U con
+atractor y entrenamiento algebraico implícito no tienen fórmula ni
+algoritmo en la especificación, así que no se construyeron. Tampoco
+se inventó nada para tapar el hueco.
+
+## Versiones
+
+- **v0.1.0** — paquete genérico de auto-reparación (detect/spec/
+  validate/ledger/verify/heal).
+- **v0.2.0-vqcc** — reorientación a VQCC (contratos, costos, detector,
+  verificador local, ledger, búsqueda).
+- **v0.2.1-vqcc** — calibración por sonda estilo DSP, veto de salud,
+  `best_verified_S` separado.
+- **v0.3.0** — AUTO_MVP: filtro de integridad, CVV, checkpoint,
+  meta con regla de paro, proxy de metadatos, orquestador.
