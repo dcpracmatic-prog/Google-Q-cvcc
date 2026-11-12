@@ -8,7 +8,9 @@ resultados del repo:
 - Servidor MCP: initialize + tools/list + tools/call dan lo mismo.
 - tools.py (ChatGPT/Grok): las funciones dan lo mismo.
 - functions.json: esquema válido, 6 funciones, mismos nombres.
-- SKILL.md: formato Agent Skills (frontmatter con name/description).
+- La skill: mcp_server.py, tools.py, functions.json (el código).
+  El único markdown del repo es README.md, que describe cómo
+  funciona y qué hace.
 - pip install: el paquete se instala desde el repo y la CLI corre
   desde la instalación (ruta vendida / Kaggle simulada con el
   paquete vendido en un directorio limpio).
@@ -58,7 +60,7 @@ def _cli(*args, inp=None, cwd=None):
 
 
 def test_cli_version_and_gate():
-    assert _cli("version")["version"] == "1.1.0"
+    assert _cli("version")["version"] == "1.0.1"
     g = _cli("gate", "--meta-mvp", "30")
     assert abs(g["required_dqi_ratio"] - 127.335) < 0.01
     assert abs(g["target_S_dqi"] - 1.916e11) / 1.916e11 < 1e-3
@@ -168,18 +170,18 @@ def test_functions_json_schema():
         assert f["function"]["parameters"]["type"] == "object"
 
 
-def test_skill_md_format():
-    text = (SKILL / "SKILL.md").read_text()
-    assert text.startswith("---\nname: auto-mvp-vqcc\n")
-    assert "description:" in text.split("---")[1]
+def test_skill_files_and_readme():
+    """La skill: el código (MCP, tools, functions) y el README,
+    que es el único markdown del repo y describe cómo funciona."""
+    assert (SKILL / "mcp_server.py").exists()
+    assert (SKILL / "tools.py").exists()
+    assert (SKILL / "functions.json").exists()
+    readme = (REPO / "README.md").read_text()
     for op in ("evaluate_candidate", "apply_morph_tunnel", "decode_json_config",
                "run_orchestrator", "check_integrity", "export_module",
                "validate_submission", "combine_best", "promotion_gate"):
-        assert op in text
-    assert (SKILL / "references" / "install.md").exists()
-    assert (SKILL / "references" / "operations.md").exists()
-    assert (SKILL / "mcp_server.py").exists()
-    assert (SKILL / "tools.py").exists()
+        assert op in readme
+    assert "SKILL.md" not in [p.name for p in SKILL.iterdir()]
 
 
 def test_pip_install_and_vendored_path(tmp_path):

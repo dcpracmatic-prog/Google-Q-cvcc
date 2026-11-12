@@ -22,9 +22,13 @@ componentes v0.2.1 (que quedan intactos) con tres compuertas nuevas:
 5. CONVERGENCIA: la meta con regla de paro decide el final; el último
    récord CVV es MVP_CONVERGENCE con el mejor final.
 
-Lo que NO está aquí (queda fuera a propósito, ver SPEC_AUTO_MVP.md):
-motor morfogenético, tensor TERM_U con atractor, entrenamiento
-algebraico implícito. Sin fórmula no hay implementación.
+El motor morfogenético y el decodificador JSON SÍ están aquí
+(v0.6.0): su formalización algorítmica es Qualtran (Bloqs, grafo
+de llamadas, T/Q de primera clase), en qualtran_bridge.py,
+morph_tunnel.py, json_directive.py, step_plan.py y orchestrator.py.
+Lo que queda fuera: el tensor TERM_U con atractor y el
+entrenamiento algebraico implícito, que no tienen fórmula ni
+algoritmo definidos.
 
 El lazo es el mismo que SearchLoop.run() con las tres compuertas
 (proxy, integridad, CVV+checkpoint). Se implementa aparte para no

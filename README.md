@@ -1,287 +1,133 @@
-# AUTO_MVP — núcleo autónomo de optimización para VQCC
+# AUTO_MVP — auto-optimizador para VQCC
 
 Optimización de circuitos para la competencia Google Quantum AI —
-Verifiable Quantum Circuit Compilation (VQCC), con la lección del
-paso 51 como regla: **ninguna reducción de recursos puede romper la
-equivalencia lógica**.
+Verifiable Quantum Circuit Compilation (VQCC). El sistema busca
+combinaciones de las tres tareas (invsqrt, DQI, química) que sumen
+el puntaje pedido, y exporta la base para auditarla y diseñar el
+submission real.
 
-> **Repo privado mientras la competencia esté abierta.** El trabajo
-> VQCC no se publica hasta que Arturo decida el momento estratégico.
+> **Repo privado mientras la competencia esté abierta.**
 
-## Qué es
+## Qué hace
 
-AUTO_MVP v0.3.0 es el corrector v0.2.1-vqcc con tres piezas nuevas
-que la especificación AUTO_MVP v0.0.1 pedía y que sí se pueden
-construir:
+- **Auto-reparación (harness VQCC):** vigila el costo S de cada
+  tarea, detecta cuando un candidato empeora o rompe el contrato,
+  calibra el margen con una sonda parecida a la carga, y baja la
+  autonomía (AUTO → PROPOSE → SHADOW) cuando la compilación falla
+  3 veces seguidas. El mejor verificado vive separado del mejor
+  proyectado.
+- **Optimización:** criba variantes por metadatos (proxy), tunela
+  bloques con reglas MORPH medidas (Qualtran: grafo de llamadas,
+  T/Q de primera clase), lee directivas JSON, y promueve lo que
+  bate el mejor envío.
+- **La guía:** guarda el mejor componente por tarea ENTRE corridas
+  (la corrida 1 puede traer el mejor invsqrt y la corrida 2 el
+  mejor DQI) y, dado un objetivo, dice si la combinación llega y
+  cuánto le falta a cada tarea. Cuando llega, exporta los tres
+  componentes en un ZIP de auditoría.
+- **El formato del submission:** arma el ZIP con la estructura
+  oficial y lo valida; si no pasa, lo borra.
 
-| Pieza | Qué hace | Módulo |
-|---|---|---|
-| Filtro de integridad | Revisa sigma, C/B, dreg, alpha y temporales por candidato; veta la regresión con forma de paso 51 aunque tenga mejor S | `auto_mvp/integrity.py` |
-| Bitácora CVV | Cadena de hashes de los récords (tamper-evident, no firma) | `auto_mvp/cvv.py` |
-| Checkpoint | Guarda de inmediato cada mejor verificado (escritura atómica) | `auto_mvp/checkpoint.py` |
-| Meta con regla de paro | Meta en S o en %, presupuesto que crece solo con mejoras, paro con motivo | `auto_mvp/goal.py` |
-| Proxy de metadatos | Criba variantes por anchos, densidades y topes antes de construir | `auto_mvp/proxy.py` |
-| Orquestador | El ciclo de 5 fases sobre los componentes v0.2.1 | `auto_mvp/mvp.py` |
-| GF(2^12) y sigma con escala | El sigma del circuito es k × mónico: se compara en forma mónica | `auto_mvp/gf212.py`, `auto_mvp/integrity.py` |
-| Caché de verificación | Un candidato idéntico no se vuelve a verificar | `auto_mvp/cache.py` |
-| Rotación del ledger | El ledger en disco rota a 1 MB | `auto_mvp/healing/ledger.py` |
+El mérito es siempre el **S oficial**: DQI `R·Q²·T`, invsqrt
+`Q·C` (con la síntesis de rotaciones incluida), química
+`λ_eff·T·Q`. El puntaje es la media geométrica de los ratios
+(referencia / propio) en las tres tareas.
 
-El mérito de aceptación es siempre el **S oficial** (DQI: R·Q²·T;
-invsqrt: Q·C; química: λ_eff·T·Q). La suma ponderada de la
-especificación (α·Q²+β·Toffoli+γ·T) solo existe como `proxy_merit`:
-ordena, nunca decide.
+## Cómo funciona
 
-## Estructura
+```
+candidato
+  → proxy (criba por metadatos, en milisegundos)
+  → puerta de promoción (GM estimada contra el mejor envío)
+  → artefacto i<iter>-<score> + export al dataset (estructura + código)
+  → compilación pesada (solo lo promovido)
+  → ledger del mejor por tarea (entre corridas)
+  → combinación contra el objetivo → ZIP de auditoría
+```
+
+El filtro de integridad revisa sigma, C/B, dreg, alpha y
+temporales por candidato: ninguna reducción de recursos puede
+romper la equivalencia lógica (la lección del paso 51). La
+bitácora CVV es una cadena de hashes de los récords. El
+checkpoint guarda cada mejor verificado al instante.
+
+## Los números
+
+- **Mejor envío: 23.94667** (ref 58076483): invsqrt propio
+  certificado S 100,568.5 (20.65x), DQI público híbrido S 3.7676e11
+  (64.76x, Q=892), química pública S 326,800,029.87 (10.27x).
+- **Objetivo 30.00:** el producto debe ser 27,000 (30³) contra
+  13,732 actual. Solo por DQI, S 1.9162e11 (127.3x, T −49.1%).
+- **Mejores propios medidos:** DQI Montgomery b=17 S 3.2331e12
+  (Q=1,414, T=1,315,731); química baseline λ_eff 49.254686,
+  error_2 16.1332 mHa.
+
+## Componentes
 
 ```
 auto_mvp/
-  healing/        paquete genérico de auto-reparación v0.1.0 (intacto)
-  vqcc/           harness v0.2.1: contratos, costos, detector,
-                  verificador local, ledger, búsqueda, calibración
-  integrity.py    filtro + guardia de construcción (NUEVO v0.3.0)
-  cvv.py          cadena de hashes CVV (NUEVO)
-  checkpoint.py   checkpoint atómico (NUEVO)
-  goal.py         meta y regla de paro (NUEVO)
-  proxy.py        proxy de metadatos (NUEVO)
-  mvp.py          orquestador AUTO_MVP (NUEVO)
-tests/            4/4 humo + 5/5 harness + 9/9 v0.2.1 + nuevos v0.3.0
-examples/         ejemplo_searchloop_v021.py, ejemplo_auto_mvp_v030.py
-SPEC_AUTO_MVP.md  la especificación v0.0.1 y qué se implementó de ella
+  healing/        auto-reparación genérica v0.1.0
+  vqcc/           harness: contratos, costos, detector, verificador,
+                  ledger, búsqueda, calibración
+  integrity.py    filtro de integridad (sigma, C/B, dreg, alpha)
+  cvv.py          cadena de hashes de los récords
+  checkpoint.py   checkpoint atómico
+  goal.py         meta (meta_mvp) y regla de paro
+  proxy.py        proxy de metadatos (con la síntesis de rotaciones)
+  pipeline.py     pipeline por fases (6 h / 24 h)
+  qualtran_bridge.py  Bloqs reales → grafo de llamadas, T/Q
+  morph_tunnel.py     túnel MORPH (reglas con evidencia medida)
+  json_directive.py   directivas JSON en lenguaje natural
+  step_plan.py        plan de pasos reprogramable en caliente
+  orchestrator.py     orquestador adaptativo
+  numeric_lab.py      prefiltro Chebyshev invsqrt + puerta fail-closed
+  mwis.py             selección MWIS (LOGIC_CORE v4)
+  maxcut.py           partición MaxCut del grafo de conflictos
+  observer.py         observador (solo observa, nunca veta)
+  dataset.py          dataset de trabajo (estructura + código)
+  packaging.py        formato del submission.zip y su validador
+  combiner.py         la guía (mejor por tarea, entre corridas)
+  operations.py       punto de entrada único (9 operaciones)
+  cli.py              CLI: python -m auto_mvp.cli <op>
+skills/auto-mvp-vqcc/
+  mcp_server.py     servidor MCP (stdio, solo stdlib) para Claude
+  tools.py          las operaciones como funciones (ChatGPT, Grok)
+  functions.json    esquema de function calling (OpenAI)
+tests/            suite completa (110 tests)
+examples/         maxcut_reference.cpp (el C++ de Arturo, verbatim)
 ```
 
-## Pipeline por fases (6 h / 24 h)
+## Uso
 
-Ver `PIPELINE.md` y `auto_mvp/pipeline.py`. Tres fases:
+```bash
+# La guía: ¿llega la mejor combinación a 30.00?
+python -m auto_mvp.cli combine --target 30 --runs-dir runs --export
 
-1. **Filtro rápido:** el proxy evalúa variantes paramétricas en
-   milisegundos y descarta lo inviable sin compilar nada.
-2. **Promoción por beneficio real:** solo si la GM estimada bate el
-   mejor envío (por defecto **> 23.94667**) se da luz verde. La
-   puerta mide contra los componentes del mejor envío (invsqrt
-   20.65x, DQI público 64.76x, química pública 10.27x): batirlo
-   exige DQI ~64.76x. La meta 30.00 no es alcanzable con el enfoque
-   actual (producto 27,000 vs 13,732; solo por DQI, T −49.1%).
-3. **Compilación pesada y artefactos:** lo promovido se guarda como
-   `i<iteración>-<puntaje>` (ej. `i120549-34.16`) y solo el
-   verificador oficial lo confirma.
+# Evaluar un candidato (proxy + puerta)
+python -m auto_mvp.cli evaluate --in candidato.json --meta-mvp 30
 
-El pipeline corre en bloques con presupuesto de tiempo y se reanuda
-desde `runs/state.json`. El notebook lo inicializa con
-`auto_mvp/kaggle_init.py`: los datos de la competencia son de solo
-lectura (`/kaggle/input`), el código viene del repo (clon o snapshot
-con su SHA), y todo lo producido va a `<working>/runs/`.
+# Tunelar un grafo (Chien → Montgomery b=17)
+python -m auto_mvp.cli tunnel --in grafo.json
 
-## Uso rápido
+# Validar el formato de un submission.zip
+python -m auto_mvp.cli validate --path submission.zip
 
-```python
-from auto_mvp import AutoMvp, Goal, MetadataProxy
-from auto_mvp.vqcc import dqi_spec
-
-spec = dqi_spec()
-goal = Goal(baseline_S=spec.baseline_S, improvement_pct=50.0,
-            base_trials=10, max_trials=20, patience=5)
-proxy = MetadataProxy(spec, hard_caps={"max_qubits": 2000}, margin=0.10)
-mvp = AutoMvp(spec, mi_proponente, goal, proxy=proxy, workdir="./run1")
-res = mvp.run()
-print(res.best_S, res.integrity_vetoes, res.proxy_rejected, res.stop_reason)
+# La puerta de promoción
+python -m auto_mvp.cli gate --meta-mvp 30
 ```
 
-El proponente es un protocolo: recibe el spec, el mejor candidato y
-la evidencia, y devuelve un candidato (dict con `metrics`, y
-opcionalmente `integrity` y `meta`). El lazo no inventa mutaciones.
+Las 9 operaciones (`evaluate_candidate`, `apply_morph_tunnel`,
+`decode_json_config`, `run_orchestrator`, `check_integrity`,
+`export_module`, `validate_submission`, `combine_best`,
+`promotion_gate`) están en `auto_mvp/operations.py` y se invocan
+igual por CLI, MCP y `tools.py`.
 
 ## Correr los tests
 
 ```bash
 python3 -m pytest tests/ -q
-# o sin pytest:
-python3 tests/test_auto_mvp_v030.py
-python3 examples/ejemplo_auto_mvp_v030.py
 ```
 
-Solo stdlib: no hay dependencias.
-
-## Reglas honestas
-
-- **Proyectado no es medido.** El cribado por costo guía la
-  búsqueda; solo el verificador oficial corona un mejor verificado.
-  `best_S` y `best_verified_S` viven por separado.
-- **Sin evidencia no hay verificación.** Un candidato con circuito
-  real debe traer evidencia de integridad; sin ella solo puede ser
-  mejor proyectado.
-- **El CVV no es una firma.** Es una cadena de hashes: detecta que
-  alguien alteró un récord, no prueba quién lo escribió.
-- **El proxy no acepta.** Rechaza lo inviable y ordena el resto;
-  la aceptación la deciden el verificador y el filtro de integridad.
-- **El filtro envuelve la construcción.** El paso 51 nunca pasó por
-  el lazo de búsqueda; por eso la guardia vive en el constructor.
-
-## Qué NO está implementado (a propósito)
-
-Ver `SPEC_AUTO_MVP.md`: el tensor TERM_U con atractor y el
-entrenamiento algebraico implícito no tienen fórmula ni algoritmo
-en la especificación, así que no se construyeron. Tampoco se
-inventó nada para tapar el hueco.
-
-**Corrección v0.6.0 (Arturo, 2026-11-11):** el motor
-morfogenético y el decodificador de JSON SÍ se construyeron, porque
-la formalización algorítmica que les faltaba es Qualtran (Bloqs,
-grafo de llamadas, T/Q como cantidades de primera clase), no una
-fórmula por inventar. Quedaron en `qualtran_bridge.py`,
-`morph_tunnel.py`, `json_directive.py`, `step_plan.py` y
-`orchestrator.py`. Lo que Qualtran NO cubre se dice con el dato
-(ver STATUS.md): no demuestra equivalencia entre Bloqs, y el
-circuito DQI kickmix no es un Bloq de Qualtran.
-
-## Versiones
-
-- **v0.1.0** — paquete genérico de auto-reparación (detect/spec/
-  validate/ledger/verify/heal).
-- **v0.2.0-vqcc** — reorientación a VQCC (contratos, costos, detector,
-  verificador local, ledger, búsqueda).
-- **v0.2.1-vqcc** — calibración por sonda estilo DSP, veto de salud,
-  `best_verified_S` separado.
-- **v0.3.0** — AUTO_MVP: filtro de integridad, CVV, checkpoint,
-  meta con regla de paro, proxy de metadatos, orquestador.
-- **v0.3.1** — Mejoras: sigma consciente de escala (GF(2^12) mod
-  0x1053, el campo del DQI; k=2314 en el shot 0 del paso 51), caché
-  de verificación por hash de parámetros, rotación del ledger a
-  1 MB, y el orquestador guarda la cadena CVV y el ledger en el
-  directorio del run.
-- **v0.3.2** — Pipeline por fases (6 h / 24 h): filtro rápido por
-  proxy, puerta de promoción por GM estimada (bate el mejor envío
-  23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
-  `kaggle_init` con la separación inmutable / código / trabajo.
-- **v1.0.0** — **La guía: el mejor por tarea, entre corridas.**
-  El auto-optimizador es una GUÍA, no un compilador ni un
-  validador. Un ledger persistente (`runs/best_per_task.json`)
-  guarda el mejor componente por tarea ENTRE corridas (la corrida
-  1 puede traer el mejor invsqrt y la corrida 2 el mejor DQI: la
-  combinación toma el mejor de cada tarea, venga de la corrida que
-  venga; solo mejora, y cada reemplazo queda en el historial con
-  su procedencia). Dado un objetivo (ej. 30.00), `combine_best`
-  dice si la combinación llega y cuánto le falta a CADA tarea (el
-  DQI necesitaría S 1.9162e11, 127.3x). Cuando llega, exporta la
-  base de auditoría en un ZIP (`audit-base-<gm>.zip`) con los tres
-  componentes y un manifest.json con su procedencia, para auditar
-  y diseñar el submission real. El pipeline alimenta el ledger al
-  promover y exporta la base cuando la combinación llega al
-  objetivo. Operación nueva en la Skill: `combine_best` (CLI, MCP,
-  tools.py, functions.json: 9 operaciones). Tests 6/6 nuevos,
-  110/110 en total.
-- **v0.9.1** — **La síntesis de rotaciones en el costo invsqrt
-  (fail-closed).** El proxy ya no ignora el costo de síntesis de
-  rotaciones Z_POW finas: la fórmula es la del verificador oficial
-  (`rotation_t_count(eps) = 0.56*log2(1/eps) + 5.3`, idéntica a la
-  del verificador, verificada contra su archivo). El eps sale del
-  margen de tolerancia que deja la aproximación (cota inferior
-  `(2^-24 - rel_error) / sqrt(3,133,452)`; el e1 sale de la tabla
-  del Lab cuando el candidato trae grado/segmentos). Con 37
-  rotaciones y el e1 del mejor prefiltro, la referencia da
-  S 2,077,168.5, a 0.019% del S oficial 2,076,774 (sin la síntesis
-  daría 2,011,100, un 3.2% por debajo). Rotaciones sin rel_error,
-  o rel_error >= 2^-24, se rechazan (fail-closed). El module.py
-  exportado usa la misma fórmula. Sin rotaciones, la fórmula es
-  la de siempre. Tests 7/7 nuevos, 104/104 en total.
-- **v0.9.0** — **Formato del submission.zip y su validador
-  (fail-closed):** el formato oficial ahora vive en el repo
-  (`auto_mvp/packaging.py`, SPEC_AUTO_MVP.md, PIPELINE.md), no
-  solo en memoria (la v0.3.0 falló por duplicados en otras rutas).
-  `validate_submission_zip` / `validate_submission_dir` comprueban:
-  rutas exactas, sin directorio raíz extra, sin duplicados, un
-  solo invsqrt y un solo dqi, angle_k consecutivos desde 0 sin
-  huecos, submission.npz con las 6 claves (U, W, H2_I, H1_I,
-  Hsym_lower, tree_edges). `build_submission_zip` arma el ZIP con
-  la estructura correcta y lo BORRA si no pasa la validación.
-  `submission_ready` da READY solo si la puerta fail-closed (los
-  tres verificadores en modo full) Y el formato pasan. El validador
-  revisa el FORMATO, no el contenido. Operación nueva en la Skill:
-  `validate_submission` (CLI, MCP, tools.py, functions.json: 8
-  operaciones). Verificado con ZIPs reales: el válido pasa, y cada
-  desviación (duplicados, huecos, raíz extra, archivo extra, NPZ
-  sin clave) falla con su motivo. Tests 9/9 nuevos, 97/97 en total.
-- **v0.8.0** — **Dataset de trabajo (exportar e inyectar
-  módulos):** el fail-closed sigue intacto para el submission.zip
-  final, pero un módulo promovido ya no se queda en un manifiesto
-  con métricas frías: cada promoción exporta e inyecta su
-  estructura completa y su código ejecutable al dataset de trabajo
-  (`<runs_dir>/dataset/<nombre>/`): `structure.json` (grafo de
-  llamadas completo, métricas, evidencia), `module.py` (código
-  ejecutable, solo stdlib: rebuild la estructura y recomputa S y
-  GM; `python module.py` lo verifica) y `source/...` (el código del
-  constructor, cuando el candidato lo trae). El índice
-  `dataset/index.json` lista los módulos inyectados y el cargador
-  (`WorkingDataset.load`) devuelve el grafo, las métricas y la ruta
-  del código ejecutable. La fase 3 (compilación) consume el
-  dataset, no un manifiesto pelado. Operación nueva en la Skill:
-  `export_module` (CLI, MCP, tools.py, functions.json: 7
-  operaciones). Verificado: el module.py exportado de Montgomery
-  reproduce S 3.2331e12 y GM 11.697 en un proceso limpio, y el
-  cargador devuelve el grafo tunelado (T 1,315,731, no el base
-  1,511,522). Tests 7/7 nuevos, 88/88 en total.
-- **v0.7.0** — **Skill / Tool nativa para LLMs (extra, no
-  reemplazo):** el sistema sigue corriendo solo como antes, y además
-  cualquier LLM puede invocarlo como herramienta. `skills/auto-mvp-vqcc/`
-  trae `SKILL.md` (formato Agent Skills: qué hace, cuándo usarlo,
-  cómo invocarlo, límites), `mcp_server.py` (servidor MCP stdio,
-  solo stdlib, para Claude), `tools.py` + `functions.json` (las 6
-  operaciones como funciones Python y esquema de function calling
-  para ChatGPT Code Interpreter y Grok), y `references/` (install
-  por entorno: Kaggle Code por snapshot vendido, Claude con
-  terminal, ChatGPT, Grok; operations con entradas/salidas y
-  ejemplos). El punto de entrada es el mismo en todos lados:
-  `auto_mvp/operations.py` + CLI (`python -m auto_mvp.cli`:
-  evaluate, tunnel, decode, run, integrity, gate, version).
-  Verificado con números: la skill invocada en sandbox reproduce
-  los del repo (gate 30 -> ratio 127.335; evaluate Montgomery ->
-  S 3.2331e12, GM 11.697; tunnel -> T 1,511,522 -> 1,315,731; run ->
-  promovido 1, tunelado 1; pip install desde el repo funciona).
-  Tests 11/11 nuevos, 81/81 en total.
-- **v0.6.0** — **Capa de adaptación dinámica (MORPH + JSON +
-  orquestador adaptativo):** la formalización algorítmica es
-  Qualtran. `qualtran_bridge` extrae el grafo de llamadas de un
-  Bloq real (verificado: Toffoli T=4 Q=3; Add(QUInt(4)) T=12 Q=8,
-  And 3+3 + CNOT 15) con T/Q como cantidades de primera clase.
-  `morph_tunnel` reordena y reemplaza BLOQUES sobre ese grafo
-  (reglas con evidencia medida: Chien→Montgomery b=17, T 1,511,522
-  → 1,315,731; multiplicador Toom-3→Toom-4, S 1.99836e13 →
-  1.923348e13). `json_directive` lee JSON con directivas en lenguaje
-  natural (vocabulario controlado, determinista; lo que no encaja se
-  reporta, nunca se tira). `step_plan` es el plan de pasos
-  reprogramable en caliente (reordenar, reemplazar métodos, insertar,
-  quitar, con log). `orchestrator` (AdaptiveOrchestrator) lee el
-  JSON, reordena pasos, adapta metodologías en caliente y ejecuta
-  iteraciones inteligentes: con túnel antes del proxy, el candidato
-  BM+Forney pasa el proxy y promueve (GM ~11.7 con meta 2.0); con
-  túnel después, el proxy lo rechaza. Tests 20/20 nuevos, 70/70
-  en total.
-- **v0.5.0** — **meta_mvp (parámetro absoluto) + ventaja pura:**
-  la lógica de metas acepta `meta_mvp` (el puntaje que se le exige
-  al sistema, ej. 30.00); la barra de parada la dicta ese umbral,
-  no un envío anterior (`Goal.for_meta_mvp`, `PromotionGate(meta_mvp)`,
-  `Pipeline(meta_mvp=...)`, parada por meta solo cuando un candidato
-  REAL alcanza la meta — un target es una hipótesis, no el circuito).
-  `pure_advantage` evalúa la mejora real (Toffolis, cúbits, T) frente
-  al baseline oficial y la traduce al puntaje con la fórmula de la
-  competencia. **Lab incorporado:** `numeric_lab` (port stdlib del
-  prefiltro Chebyshev del Lab: 28 candidatos, 17 factibles, mejor
-  grado 7 / 1 segmento, verificado contra el original numpy) con
-  gancho en el proxy, y `fail_closed_gate` (solo los tres
-  verificadores en modo full arman el submission.zip). **LOGIC_CORE
-  MWIS incorporado** (`mwis.py`, port fiel del núcleo v4): la
-  selección por lado es MWIS con peso = ganancia en S (la unión
-  D, I, G, L, M gana más que el MIS voraz; incluye G_b17). Sin
-  directiva, la puerta sigue promoviendo lo que bate 23.94667.
-- **v0.4.0** — MaxCut (port fiel del C++ de Arturo) partiendo el
-  grafo de conflictos; calibración DCP en el pipeline (margen,
-  paciencia y presupuesto de la sonda); Observer con régimen
-  derivado de la bitácora (sin parámetro condition, sin veto);
-  modo AUTO→PROPOSE→SHADOW en el pipeline. **Constantes
-  corregidas:** la puerta mide contra el mejor envío
-  (BEST_SUBMISSION_S: DQI público 3.7676e11, química pública
-  3.268e8) y promueve lo que bate 23.94667; 30.00 no es alcanzable
-  con el enfoque actual (producto 27,000 vs 13,732).
-- **v0.3.3** — Corrección del init: la copia vendida puede ser el
-  paquete mismo o el directorio que lo contiene (el notebook lleva
-  `auto-mvp-vendored/auto_mvp/`); el test del init usa el layout del
-  notebook.
+Solo stdlib: no hay dependencias. El venv con Qualtran 0.7.0 y
+kickmix 0.1 (lo que usan los verificadores oficiales) está en
+`~/workspace/sandbox-run/venv/bin/python`.
