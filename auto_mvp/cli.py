@@ -17,6 +17,7 @@ funciones para ChatGPT/Grok; ver auto_mvp/operations.py):
     mutate     el mutador autónomo: genera candidatos mutando la semilla
     serial     la orquestación en serie con compensación global
     notebook   exporta los tres módulos ganadores a un .ipynb ejecutable
+    auto       el corredor autónomo: dime cuánto quieres y busca la base
     version    la versión del paquete
 
 Entrada y salida son JSON (por archivo con --in/--out, o por stdin/
@@ -29,6 +30,7 @@ import json
 import sys
 
 from . import __version__
+from .auto import run_auto
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          combine_best, decode_json_config,
                          evaluate_candidate, export_module, export_notebook,
@@ -126,6 +128,22 @@ def main(argv: list[str] | None = None) -> int:
     nb.add_argument("--target", type=float, default=None,
                     help="puntaje objetivo (meta_mvp)")
 
+    a = add("auto", "el corredor autónomo: dime cuánto quieres y busca la base")
+    a.add_argument("--target", type=float, required=True,
+                   help="puntuación a alcanzar (ej. 25, 1.5, 10000)")
+    a.add_argument("--runs-dir", default="runs",
+                   help="dónde guardar runs y el ZIP (por defecto runs)")
+    a.add_argument("--n", type=int, default=10,
+                   help="mutantes por tarea y ronda (por defecto 10)")
+    a.add_argument("--brute-steps", type=int, default=200,
+                   help="operaciones de fuerza bruta por tarea y ronda")
+    a.add_argument("--max-rounds", type=int, default=None,
+                   help="límite de rondas (si no, hasta llegar)")
+    a.add_argument("--time-budget", type=float, default=None,
+                   help="presupuesto de tiempo en segundos")
+    a.add_argument("--seed", type=int, default=42,
+                   help="semilla del generador (determinista)")
+
     sub.add_parser("version", help="la versión del paquete")
 
     args = p.parse_args(argv)
@@ -180,6 +198,13 @@ def main(argv: list[str] | None = None) -> int:
         elif args.op == "notebook":
             out = export_notebook(runs_dir=args.runs_dir, out_path=args.out,
                                   target_gm=args.target)
+        elif args.op == "auto":
+            out = run_auto(args.target, runs_dir=args.runs_dir,
+                           n_per_task=args.n,
+                           brute_steps=args.brute_steps,
+                           max_rounds=args.max_rounds,
+                           time_budget_seconds=args.time_budget,
+                           seed=args.seed)
         else:  # pragma: no cover
             p.error(f"operación desconocida: {args.op}")
     except (ValueError, KeyError, TypeError) as exc:

@@ -267,3 +267,56 @@ def export_audit_zip(ledger: BestLedger, out_path: str | Path,
     return {"path": str(out_path), "files": files, "gm": combo["gm"],
             "reached": combo["reached"], "projected": combo["projected"],
             "target": combo["target"]}
+
+
+def export_base_zip(entries: dict[str, dict[str, Any]],
+                    out_path: str | Path, target_gm: float, gm: float,
+                    required: dict[str, Any] | None = None) -> dict[str, Any]:
+    """Exporta la base en un ZIP, desde entradas dadas (no del ledger).
+
+    Lo usa el corredor autónomo cuando la combinación llega con
+    componentes de fuerza bruta: esas entradas no están en el ledger
+    (no son medido) y no se pueden exportar con export_audit_zip.
+    Cada component.json lleva sus métricas y su procedencia, y el
+    manifest marca ``projected: true`` si algún componente es
+    proyectado (fuerza bruta), con sus operaciones aritméticas.
+    Sin .kmb: la base, no la solución.
+    """
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    files: list[str] = []
+    projected = False
+    with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED) as zf:
+        for task in TASKS:
+            entry = entries.get(task)
+            if entry is None:
+                continue
+            if not entry.get("measured", False):
+                projected = True
+            arc = f"{task}/component.json"
+            zf.writestr(arc, json.dumps(entry, indent=2,
+                                        ensure_ascii=False))
+            files.append(arc)
+        manifest = {
+            "target": float(target_gm),
+            "gm": float(gm),
+            "reached": True,
+            "projected": projected,
+            "components": {t: {
+                "name": e.get("name"), "kind": e.get("kind"),
+                "S": e.get("S"), "ratio": e.get("ratio"),
+                "measured": e.get("measured", False),
+                "run_id": e.get("run_id"),
+                "iteration": e.get("iteration"),
+                "artifact_name": e.get("artifact_name"),
+                "source_commit": e.get("source_commit"),
+                "ops": e.get("ops"),
+            } for t, e in entries.items() if t in TASKS},
+            "required": required or {},
+        }
+        zf.writestr("manifest.json", json.dumps(manifest, indent=2,
+                                                ensure_ascii=False))
+        files.append("manifest.json")
+    return {"path": str(out_path), "files": files, "gm": float(gm),
+            "reached": True, "projected": projected,
+            "target": float(target_gm)}

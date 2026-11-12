@@ -151,6 +151,29 @@ examples/         maxcut_reference.cpp (el C++ de Arturo, verbatim)
 
 ## Uso
 
+El comando único (instalar, decir cuánto quieres, ejecutar):
+
+```bash
+# Busca la base para la meta que digas (1.5, 25, 10000...). Rondas
+# 1-2-3-1-2-3; al llegar entrega runs/audit-base-<gm>.zip con las
+# configuraciones y las métricas de cada tarea. Sin .kmb: esto NO es
+# la solución de la competencia, es la base para crearla.
+# Fuerza bruta: si lo real no llega, las variables de costo se bajan
+# con operaciones aritméticas (restar, multiplicar, dividir...),
+# LAS TRES TAREAS A LA VEZ (la meta es el producto cruzado: cada una
+# mejora por el mismo factor, no una sola cargando todo). Cerca del
+# objetivo solo pasos finos, para no pasar de largo. Los conteos son
+# enteros y cada propuesta pasa los límites físicos del contrato
+# (DQI eps+ < 1/16, química Lambda > 49, Angles_k <= 128 cúbits).
+# Nunca se para por estancamiento: solo paran los límites que pongas
+# (--max-rounds, --time-budget) o llegar a la meta. Lo de fuerza
+# bruta va marcado como proyectado en el manifest. Si hay .kmb/.kmx
+# en runs, se validan con Kickmix y el resultado va en el JSON.
+python -m auto_mvp.auto --target 25
+```
+
+El resto de operaciones sueltas:
+
 ```bash
 # La guía: ¿llega la mejor combinación a 30.00?
 python -m auto_mvp.cli combine --target 30 --runs-dir runs --export

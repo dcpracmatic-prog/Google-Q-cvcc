@@ -49,7 +49,8 @@ from .accel import available as accel_available
 from .accel import dijkstra as accel_dijkstra
 from .accel import spmm_csr_dense as accel_spmm_csr_dense
 from .accel import swar_friction as accel_swar_friction
-from .combiner import BestLedger, combine, export_audit_zip
+from .combiner import (BestLedger, combine, export_audit_zip,
+                       export_base_zip)
 from .mutator import Mutation, Mutator
 from .notebook import export_winner_notebook
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
@@ -65,6 +66,7 @@ from .orchestrator import AdaptiveOrchestrator, OrchestratorResult
 from .pipeline import (ArtifactStore, Pipeline, PromotionGate,
                        artifact_name, promotion_gm, pure_advantage,
                        required_dqi_ratio)
+from .seeds import DEFAULT_SEEDS, default_seeds
 from .proxy import (CandidateMeta, MetadataProxy, ProxyVerdict,
                     calibrate_proxy, estimate_S, proxy_merit)
 from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
@@ -116,4 +118,24 @@ __all__ = [
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
     "__version__",
+    "run_auto", "DEFAULT_SEEDS", "default_seeds",
+    "BruteForce", "export_base_zip", "limits_ok",
 ]
+
+
+def __getattr__(name: str):
+    """Carga perezosa de auto/seeds: así `python -m auto_mvp.auto`
+    no choca con el módulo ya importado por el __init__."""
+    if name == "run_auto":
+        from .auto import run_auto
+        return run_auto
+    if name in ("DEFAULT_SEEDS", "default_seeds"):
+        from .seeds import DEFAULT_SEEDS, default_seeds
+        return DEFAULT_SEEDS if name == "DEFAULT_SEEDS" else default_seeds
+    if name == "BruteForce":
+        from .brute import BruteForce
+        return BruteForce
+    if name == "limits_ok":
+        from .brute import limits_ok
+        return limits_ok
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
