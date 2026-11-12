@@ -1,10 +1,51 @@
-# PIPELINE.md — cómo se orquestan los flujos (v1.5.0)
+# PIPELINE.md — cómo se orquestan los flujos (v2.0.0)
 
 Guía para quien (o lo que) tenga que correr o modificar el repo sin
 leer todo el código. Todo lo que dice aquí se puede comprobar en
 `auto_mvp/` y en los tests de `tests/`.
 
-## El comando único
+## El comando único (v2.0: circuitos)
+
+```bash
+python -m auto_mvp.circuit_auto --target-S 90000 --max-proposals 10
+```
+
+DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): fuerza bruta sobre
+CIRCUITOS. El corredor propone circuitos reales, los valida con el
+protocolo oficial (si no es válido, no cuenta), los mide simulando,
+y repite hasta la meta o hasta el límite que ponga quien ejecuta.
+Necesita kickmix + numpy (vienen del dataset de la competencia y
+del entorno). El corredor v1.x (`python -m auto_mvp.auto --target
+30`, solo stdlib) se mantiene por compatibilidad, superado.
+
+## El flujo del corredor de circuitos (`auto_mvp/circuit_auto.py`)
+
+1. **Semilla medida.** El ledger (`runs/circuit_ledger.json`) parte
+   de la semilla vendida (`auto_mvp/circuits/seeds/invsqrt_pub.kmx`),
+   VERIFICADA RÁPIDA con el protocolo oficial: S ≈ 100,568.5
+   (certificado 100,568.5). El mejor vive CON SU CIRCUITO
+   (`runs/best/invsqrt.kmx`), no con números sueltos.
+2. **Propuesta.** sa_windows (el operador real de Arturo,
+   `auto_mvp/circuits/operators/sa_windows.py`) reescribe ventanas
+   del mejor circuito con menos Toffolis, solo si la permutación es
+   idéntica sobre los 2^k estados. K rota (5, 6, 7) y la semilla
+   cambia por propuesta. Cada propuesta tarda ~30 s o más.
+3. **Validación.** La verificación rápida (`auto_mvp/circuit.py`,
+   `fast_verify_invsqrt`) usa el verificador oficial vendido
+   (`auto_mvp/circuits/verifiers/verify_submission_invsqrt.py`)
+   con menos shots (max_x=1024, 1 shot por x, ~0.1 s): registro x
+   de 22 cúbits, scratch a |0>, x restaurado, error de fase dentro
+   de tolerancia. Si falla, el candidato es INVÁLIDO: no cuenta,
+   se registra el motivo y se sigue.
+4. **Medición.** El S sale de simular el circuito (Toffolis medios
+   por shot + síntesis de rotaciones), no de una fórmula sobre
+   números. Si el S medido es menor que el mejor, el candidato
+   pasa a ser el mejor (con su .kmx copiado a `runs/best/`).
+5. **Repetición.** Solo paran la meta (S <= target-S), el límite
+   de propuestas o el presupuesto de tiempo que ponga quien
+   ejecuta. Nunca se para por estancamiento.
+
+## El comando v1.x (números, superado)
 
 ```bash
 python -m auto_mvp.auto --target 30

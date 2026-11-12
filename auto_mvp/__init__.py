@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "1.5.0"
+__version__ = "2.0.0"
 
 __all__ = [
     "Checkpoint",
@@ -120,6 +120,8 @@ __all__ = [
     "__version__",
     "run_auto", "DEFAULT_SEEDS", "default_seeds",
     "BruteForce", "export_base_zip", "limits_ok",
+    "fast_verify_invsqrt", "static_count", "propose_sa_windows",
+    "run_circuit_auto",
 ]
 
 
@@ -138,4 +140,13 @@ def __getattr__(name: str):
     if name == "limits_ok":
         from .brute import limits_ok
         return limits_ok
+    if name in ("fast_verify_invsqrt", "static_count", "propose_sa_windows"):
+        from .circuit import (fast_verify_invsqrt, propose_sa_windows,
+                              static_count)
+        return {"fast_verify_invsqrt": fast_verify_invsqrt,
+                "static_count": static_count,
+                "propose_sa_windows": propose_sa_windows}[name]
+    if name == "run_circuit_auto":
+        from .circuit_auto import run_circuit_auto
+        return run_circuit_auto
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

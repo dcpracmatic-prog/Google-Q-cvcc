@@ -1,14 +1,38 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 1.5.0.** Optimización de circuitos para la competencia
+**Versión 2.0.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
-El sistema busca combinaciones de las tres tareas (invsqrt, DQI,
-química) que sumen el puntaje pedido, y exporta la base para
-auditarla y diseñar el submission real.
+DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
+circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
+simulando con el protocolo oficial, y repite si no pasan, hasta
+llegar a la meta o hasta que se cancele el script. Si no es un
+circuito válido, no cuenta, no es nada. Los números sueltos de la
+v1.x (GM 30.0056) no sirven: el corredor v1.x optimizaba métricas,
+no circuitos, y su éxito era tautológico.
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace
+## Qué hace (v2.0: circuitos)
+
+- **Corredor de circuitos (`python -m auto_mvp.circuit_auto
+  --target-S 90000`):** propone circuitos reales con sa_windows
+  (el operador de Arturo, vendido en
+  `auto_mvp/circuits/operators/`), los VALIDA con el protocolo
+  oficial del verificador vendido en `auto_mvp/circuits/verifiers/`
+  (registro x de 22 cúbits, scratch a |0>, x restaurado, error de
+  fase dentro de tolerancia) y los MIDE simulando (S = Q × C con
+  Toffolis medios por shot + síntesis de rotaciones). El mejor
+  vive CON SU CIRCUITO (.kmx en `runs/best/`). Repite hasta la
+  meta o hasta el límite que ponga quien ejecuta; nunca se para
+  por estancamiento. Semilla vendida:
+  `auto_mvp/circuits/seeds/invsqrt_pub.kmx` (Q=62, S certificado
+  100,568.5; la verificación rápida lo reproduce en ~0.1 s con
+  0.01% de error).
+- **Corredor v1.x (números, superado):** el `run_auto` de las
+  versiones 1.x busca combinaciones de métricas que sumen el
+  puntaje pedido y exporta la base en ZIP + Notebook. Se mantiene
+  por compatibilidad, pero la DIRECTIVA v2.0 lo deja atrás: eso
+  no optimizaba circuitos y no sirve.
 
 - **Auto-reparación (harness VQCC):** vigila el costo S de cada
   tarea, detecta cuando un candidato empeora o rompe el contrato,
