@@ -1,19 +1,27 @@
-"""AUTO_MVP v2.2 — el corredor con modelo de lenguaje: solo salen semillas.
+"""AUTO_MVP v2.3 — el corredor con modelo de lenguaje + prefilter:
+solo salen semillas.
 
 Arturo (2026-11-12): meter un modelo de lenguaje GRATIS y BUENO, y
 NO construir .kmx en el Notebook: no cabe (todas las iteraciones +
 todo el respaldo de las semillas son gigas). Lo que se saca en esta
-parte son NADA MÁS LAS SEMILLAS.
+parte son NADA MÁS LAS SEMILLAS. Y compilar cada mutación en crudo
+es un callejón sin salida: primero el prefilter barato, y solo los
+sobrevivientes llegan a kickmix.
 
 Cómo funciona:
 
 1. **El modelo es el estratega.** Lee la mejor semilla (un JSON de
-   kilobytes) y el historial medido, y propone el siguiente
-   movimiento como JSON chico: qué K probar y con qué semilla
-   (`{"K": 6, "seed": 123, "reason": "..."}`). Nunca propone
-   compuertas: las pone sa_windows, y la validez la impone el
-   verificador oficial.
-2. **El circuito vive solo en TEMPORAL.** El mejor circuito actual
+   kilobytes) y el historial medido, y propone un LOTE de movimientos
+   como JSON chico: qué K probar y con qué semilla
+   (`{"deltas": [{"K": 6, "seed": 123, "reason": "..."}, ...]}`).
+   Nunca propone compuertas: las pone sa_windows, y la validez la
+   impone el verificador oficial.
+2. **El prefilter es la puerta.** Ordena el lote en milisegundos
+   (proxy + MWIS, `auto_mvp/prefilter.py`): descarta el 99% de la
+   basura sin tocar kickmix; solo los 1-2 mejores ganan el paso
+   caro. El proxy nunca pone el puntaje: el S que cuenta es el
+   MEDIDO con el verificador.
+3. **El circuito vive solo en TEMPORAL.** El mejor circuito actual
    se guarda en un directorio temporal durante la corrida; cada
    candidato se materializa ahí, se valida, se mide y se BORRA.
    Al terminar la corrida el temporal se elimina: en `runs/` quedan
@@ -56,6 +64,7 @@ from typing import Any, Callable
 
 from .circuit import SEED_INVSQRT, fast_verify_invsqrt, propose_sa_windows
 from .llm import LLMError, complete_json
+from .prefilter import rank_deltas
 from .seed import list_seeds, new_seed, save_seed
 
 SEED_S = {"invsqrt": 100568.5}
@@ -128,7 +137,9 @@ def _load_ledger(runs_dir: Path, task: str) -> dict[str, Any]:
             pass
     return {"task": task, "best_seed": None, "proposals": 0, "valid": 0,
             "invalid": 0, "llm_calls": 0, "llm_fallbacks": 0,
-            "rejected": []}
+            "rejected": [], "measured": [],
+            "prefilter_ranked": 0, "prefilter_discarded": 0,
+            "prefilter_winners": 0}
 
 
 def _save_ledger(runs_dir: Path, led: dict[str, Any]) -> None:
@@ -138,8 +149,12 @@ def _save_ledger(runs_dir: Path, led: dict[str, Any]) -> None:
 
 
 def _prompt(task: str, best: dict[str, Any],
-            history: list[dict[str, Any]]) -> str:
-    """El prompt del estratega: la mejor semilla + lo ya probado."""
+            history: list[dict[str, Any]], batch_size: int = 5) -> str:
+    """El prompt del estratega: la mejor semilla + lo ya probado.
+
+    Pide un LOTE de deltas (no uno solo): el prefilter los ordena en
+    milisegundos y solo los mejores ganan el paso caro.
+    """
     hist = "\n".join(
         f"- K={h.get('K')}, seed={h.get('seed')}: "
         f"{'S=' + str(h.get('S')) if h.get('valid') else 'inválido/no mejora'}"
@@ -152,13 +167,41 @@ def _prompt(task: str, best: dict[str, Any],
         f"{json.dumps(best, ensure_ascii=False)}\n\n"
         "Lo ya probado (K = tamaño de ventana, seed = azar del operador):\n"
         f"{hist or '- nada todavía'}\n\n"
-        "Propón el siguiente movimiento como JSON: "
-        '{"K": 5|6|7, "seed": <entero>, "reason": "<una frase>"}. '
+        f"Propón un LOTE de hasta {int(batch_size)} movimientos distintos "
+        "como JSON: "
+        '{"deltas": [{"K": 5|6|7, "seed": <entero>, '
+        '"reason": "<una frase>"}, ...]}. '
         "Varía K y seed respecto a lo ya probado; si un K ya dio 0 "
         "varias veces, prueba otro. No propongas compuertas ni "
         "circuitos: solo K y seed; el operador construye y el "
         "verificador oficial decide si vale."
     )
+
+
+def _parse_deltas(obj: dict[str, Any]) -> list[dict[str, Any]]:
+    """Un lote de deltas desde lo que devolvió el modelo.
+
+    Acepta {"deltas": [...]}, un solo {"K", "seed"} y una lista
+    directa. Cada delta necesita K en {5,6,7} y seed entero.
+    """
+    if isinstance(obj, dict) and "deltas" in obj:
+        raw = obj["deltas"]
+    elif isinstance(obj, dict) and "K" in obj:
+        raw = [obj]
+    elif isinstance(obj, list):
+        raw = obj
+    else:
+        raise ValueError(f"el modelo no devolvió deltas: {str(obj)[:200]}")
+    if not isinstance(raw, list) or not raw:
+        raise ValueError("el lote de deltas está vacío")
+    out = []
+    for d in raw:
+        K = int(d["K"])
+        if K not in (5, 6, 7):
+            raise ValueError(f"K={K} fuera de {5, 6, 7}")
+        out.append({"K": K, "seed": int(d["seed"]),
+                    "reason": str(d.get("reason", ""))[:200]})
+    return out
 
 
 def run_llm_auto(target_S: float, task: str = "invsqrt",
@@ -169,14 +212,22 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                  llm_client: Callable[[str], dict[str, Any]] | None = None,
                  provider: str | None = None,
                  seed: int = 42,
+                 batch_size: int = 5,
+                 expensive_per_round: int = 1,
+                 prefilter_margin: float = 0.25,
                  on_proposal: Callable[[dict[str, Any]], None] | None = None
                  ) -> dict[str, Any]:
-    """Corredor con modelo de lenguaje; solo salen semillas.
+    """Corredor con modelo de lenguaje + prefilter (v2.3); solo salen semillas.
 
-    Devuelve {task, target_S, best_S, best_seed, reached, proposals,
-    valid, invalid, llm_calls, llm_fallbacks, runs_dir, stopped}.
-    ``llm_client`` es una función prompt -> dict (por defecto, el
-    cliente real de auto_mvp.llm); los tests le pasan una falsa.
+    Por ronda el modelo propone un LOTE de deltas; el prefilter
+    (proxy + MWIS) los ordena en milisegundos y solo los
+    ``expensive_per_round`` mejores ganan el paso caro (construir +
+    medir con kickmix). Devuelve {task, target_S, best_S, best_seed,
+    reached, proposals, valid, invalid, llm_calls, llm_fallbacks,
+    prefilter_ranked, prefilter_discarded, prefilter_winners,
+    runs_dir, stopped}. ``llm_client`` es una función prompt -> dict
+    (por defecto, el cliente real de auto_mvp.llm); los tests le pasan
+    una falsa.
     """
     if task != "invsqrt":
         raise ValueError(
@@ -229,12 +280,18 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                 "valid": led["valid"], "invalid": led["invalid"],
                 "llm_calls": led["llm_calls"],
                 "llm_fallbacks": led["llm_fallbacks"],
+                "prefilter_ranked": led.get("prefilter_ranked", 0),
+                "prefilter_discarded": led.get("prefilter_discarded", 0),
+                "prefilter_winners": led.get("prefilter_winners", 0),
                 "runs_dir": str(runs_dir),
                 "stopped": "la semilla ya llega a la meta"}
 
     proposals = 0
     stopped = "límite alcanzado"
-    history: list[dict[str, Any]] = []
+    # El historial del estimador: lo medido + lo rechazado (de esta
+    # corrida y de las anteriores, vía el ledger).
+    history: list[dict[str, Any]] = list(led.get("measured", []))
+    history.extend(led.get("rejected", []))
     # El mejor circuito vive SOLO en temporal: se borra al terminar.
     with tempfile.TemporaryDirectory(prefix="llm-auto-") as tmp:
         work = Path(tmp) / "best.kmx"
@@ -258,95 +315,150 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                                "se vuelve a la semilla base"})
         # El mejor al arrancar es la base o la derivada reconstruida.
         while True:
-            proposals += 1
-            i = proposals
-            # 1. El estratega propone (o sa_windows si no hay modelo).
+            round_no = proposals + 1
+            # 1. El estratega propone un LOTE (o sa_windows si no hay
+            # modelo). El prefilter ordena el lote en milisegundos y
+            # solo los ganadores llegan al paso caro.
             llm_ok = False
             llm_error = ""
             try:
-                delta = llm_client(_prompt(task, best, history))
-                K = int(delta["K"])
-                op_seed = int(delta["seed"])
-                reason = str(delta.get("reason", ""))[:200]
-                if K not in (5, 6, 7):
-                    raise ValueError(f"K={K} fuera de {5, 6, 7}")
+                raw = llm_client(_prompt(task, best, history,
+                                         int(batch_size)))
+                batch = _parse_deltas(raw)
                 llm_ok = True
                 led["llm_calls"] += 1
             except (LLMError, ValueError, KeyError, TypeError) as exc:
                 llm_error = str(exc)[:200]
-                K = (5, 6, 7)[(i - 1) % 3]
-                op_seed = int(seed) + i
-                reason = "sin modelo: sa_windows con K rotando"
+                batch = [{"K": (5, 6, 7)[(round_no + j - 1) % 3],
+                          "seed": int(seed) + round_no + j,
+                          "reason": "sin modelo: sa_windows con K rotando"}
+                         for j in range(int(batch_size))]
                 led["llm_fallbacks"] += 1
-            # 2. El operador construye en temporal (se borra).
-            cand = Path(tmp) / f"cand_p{i:04d}.kmx"
-            log = Path(tmp) / f"cand_p{i:04d}.json"
-            prop = propose_sa_windows(work, cand, log, K=K,
-                                      budget_s=float(sa_budget_s),
-                                      seed=op_seed)
-            entry: dict[str, Any] = {
-                "proposal": i, "K": K, "seed": op_seed, "llm": llm_ok,
-                "reason_llm": reason, "operator": "sa_windows",
-                "gain_reported": prop.get("gain", 0)}
-            if llm_error:
-                entry["llm_error"] = llm_error
-            if not prop["ok"]:
-                entry.update({"valid": False,
-                              "reason": prop.get("reason", ""),
-                              "note": "el operador falló, no es un circuito"})
-                led["invalid"] += 1
-                led["rejected"].append(entry)
-                history.append({**entry, "S": None})
-                _save_ledger(runs_dir, led)
-                _progress(entry)
-            else:
-                measure = fast_verify_invsqrt(cand, max_x=1024)
-                entry["valid"] = bool(measure["valid"])
-                if not measure["valid"]:
-                    entry["reason"] = measure.get("reason", "")
-                    entry["note"] = "INVÁLIDO: no cuenta, no es nada"
+            ranked = rank_deltas(
+                batch, task, best_S, best, history,
+                margin=float(prefilter_margin),
+                top_k=int(expensive_per_round))
+            led["prefilter_ranked"] += len(batch)
+            led["prefilter_discarded"] += len(ranked["discarded"])
+            led["prefilter_winners"] += len(ranked["winners"])
+            for d, reason in ranked["discarded"]:
+                _progress({"round": round_no, "operator": "prefilter",
+                           "K": d.get("K"), "seed": d.get("seed"),
+                           "valid": None, "note": "descartado barato: "
+                           + str(reason)[:200]})
+            winners = ranked["winners"]
+            explored = False
+            if not winners and ranked["ranked"]:
+                # Sin historial el proxy no tiene señal: se explora
+                # con el mejor estimado y la medición CREA el
+                # historial. Sin esto, la primera ronda rechazaría
+                # todo y el corredor se quedaría quieto.
+                winners = [ranked["ranked"][0]]
+                explored = True
+            if not winners:
+                _progress({"round": round_no, "operator": "prefilter",
+                           "valid": None,
+                           "note": "el lote no pasó la puerta: "
+                                   "ninguno gana el paso caro"})
+            for delta, verdict in winners:
+                proposals += 1
+                i = proposals
+                K = int(delta["K"])
+                op_seed = int(delta["seed"])
+                reason = str(delta.get("reason", ""))[:200]
+                # 2. El operador construye en temporal (se borra).
+                cand = Path(tmp) / f"cand_p{i:04d}.kmx"
+                log = Path(tmp) / f"cand_p{i:04d}.json"
+                prop = propose_sa_windows(work, cand, log, K=K,
+                                          budget_s=float(sa_budget_s),
+                                          seed=op_seed)
+                entry: dict[str, Any] = {
+                    "proposal": i, "K": K, "seed": op_seed, "llm": llm_ok,
+                    "reason_llm": reason, "operator": "sa_windows",
+                    "gain_reported": prop.get("gain", 0),
+                    "prefilter_S_est": verdict.s_estimate,
+                    "prefilter": ("exploración sin historial"
+                                  if explored else "ganador del prefilter")}
+                if llm_error:
+                    entry["llm_error"] = llm_error
+                if not prop["ok"]:
+                    entry.update({"valid": False,
+                                  "reason": prop.get("reason", ""),
+                                  "note": "el operador falló, no es un circuito"})
                     led["invalid"] += 1
                     led["rejected"].append(entry)
                     history.append({**entry, "S": None})
                     _save_ledger(runs_dir, led)
                     _progress(entry)
                 else:
-                    led["valid"] += 1
-                    entry["S"] = measure["S"]
-                    entry["toffoli_count"] = measure["toffoli_count"]
-                    if measure["S"] < best_S:
-                        # Solo sale la SEMILLA (JSON, kilobytes).
-                        new_best = new_seed(
-                            task, measure["S"], measure["qubits"],
-                            measure["toffoli_count"],
-                            {"base": "invsqrt_pub", "K": K,
-                             "seed": op_seed, "gain": prop.get("gain", 0),
-                             "budget_s": float(sa_budget_s)},
-                            parent=best["id"],
-                            notes=f"propuesta {i} (K={K}, seed={op_seed})")
-                        save_seed(new_best, runs_dir)
-                        shutil.copyfile(cand, work)
-                        best_S = float(measure["S"])
-                        best = new_best
-                        led["best_seed"] = best
-                        entry["seed_id"] = best["id"]
-                        entry["note"] = "MEJORA: nueva mejor semilla"
+                    measure = fast_verify_invsqrt(cand, max_x=1024)
+                    entry["valid"] = bool(measure["valid"])
+                    if not measure["valid"]:
+                        entry["reason"] = measure.get("reason", "")
+                        entry["note"] = "INVÁLIDO: no cuenta, no es nada"
+                        led["invalid"] += 1
+                        led["rejected"].append(entry)
+                        history.append({**entry, "S": None})
+                        _save_ledger(runs_dir, led)
+                        _progress(entry)
                     else:
-                        entry["note"] = "válido pero no mejora"
-                    history.append({**entry, "S": entry.get("S")})
-                    led["proposals"] = proposals
-                    _save_ledger(runs_dir, led)
-                    _progress(entry)
-            if best_S <= target:
-                stopped = "meta alcanzada"
+                        led["valid"] += 1
+                        entry["S"] = measure["S"]
+                        entry["toffoli_count"] = measure["toffoli_count"]
+                        led.setdefault("measured", []).append(
+                            {"K": K, "seed": op_seed,
+                             "gain_reported": prop.get("gain", 0),
+                             "S": measure["S"], "valid": True})
+                        if measure["S"] < best_S:
+                            # Solo sale la SEMILLA (JSON, kilobytes).
+                            new_best = new_seed(
+                                task, measure["S"], measure["qubits"],
+                                measure["toffoli_count"],
+                                {"base": "invsqrt_pub", "K": K,
+                                 "seed": op_seed, "gain": prop.get("gain", 0),
+                                 "budget_s": float(sa_budget_s)},
+                                parent=best["id"],
+                                notes=f"propuesta {i} (K={K}, seed={op_seed})")
+                            save_seed(new_best, runs_dir)
+                            shutil.copyfile(cand, work)
+                            best_S = float(measure["S"])
+                            best = new_best
+                            led["best_seed"] = best
+                            entry["seed_id"] = best["id"]
+                            entry["note"] = "MEJORA: nueva mejor semilla"
+                        else:
+                            entry["note"] = "válido pero no mejora"
+                        history.append({**entry, "S": entry.get("S")})
+                        led["proposals"] = proposals
+                        _save_ledger(runs_dir, led)
+                        _progress(entry)
+                if best_S <= target:
+                    stopped = "meta alcanzada"
+                    break
+                if (max_proposals is not None
+                        and proposals >= int(max_proposals)):
+                    stopped = f"límite de propuestas ({max_proposals})"
+                    break
+                if (time_budget_seconds is not None
+                        and time.monotonic() - started
+                        >= float(time_budget_seconds)):
+                    stopped = f"presupuesto de tiempo ({time_budget_seconds}s)"
+                    break
+            if stopped != "límite alcanzado":
                 break
-            if max_proposals is not None and proposals >= int(max_proposals):
+            if (max_proposals is not None
+                    and proposals >= int(max_proposals)):
                 stopped = f"límite de propuestas ({max_proposals})"
                 break
             if (time_budget_seconds is not None
                     and time.monotonic() - started
                     >= float(time_budget_seconds)):
                 stopped = f"presupuesto de tiempo ({time_budget_seconds}s)"
+                break
+            if not winners and not ranked["ranked"]:
+                # El lote venía vacío o nada era estimable: no hay
+                # nada que probar.
+                stopped = "lote vacío"
                 break
     led["proposals"] = proposals
     _save_ledger(runs_dir, led)
@@ -355,14 +467,18 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
             "proposals": proposals, "valid": led["valid"],
             "invalid": led["invalid"], "llm_calls": led["llm_calls"],
             "llm_fallbacks": led["llm_fallbacks"],
+            "prefilter_ranked": led.get("prefilter_ranked", 0),
+            "prefilter_discarded": led.get("prefilter_discarded", 0),
+            "prefilter_winners": led.get("prefilter_winners", 0),
             "runs_dir": str(runs_dir), "stopped": stopped}
 
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Corredor con modelo de lenguaje v2.2 (invsqrt): "
-                    "el modelo propone, el operador construye, el "
-                    "verificador decide; solo salen semillas.")
+        description="Corredor con modelo de lenguaje + prefilter v2.3 "
+                    "(invsqrt): el modelo propone un lote, el prefilter "
+                    "ordena y solo los mejores ganan el paso caro; "
+                    "solo salen semillas.")
     ap.add_argument("--target-S", type=float, required=True,
                     help="el S medido que se quiere (p. ej. 90000)")
     ap.add_argument("--runs-dir", default="runs")
@@ -373,13 +489,21 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--provider", default=None,
                     help="gemini (por defecto) o groq")
     ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--batch-size", type=int, default=5,
+                    help="deltas por lote que propone el modelo")
+    ap.add_argument("--expensive-per-round", type=int, default=1,
+                    help="ganadores del prefilter que llegan a kickmix")
+    ap.add_argument("--prefilter-margin", type=float, default=0.25,
+                    help="margen calibrado del proxy (def. 0.25)")
     args = ap.parse_args(argv)
     res = run_llm_auto(
         args.target_S, runs_dir=args.runs_dir,
         max_proposals=args.max_proposals,
         time_budget_seconds=args.time_budget,
         sa_budget_s=args.sa_budget_s, provider=args.provider,
-        seed=args.seed)
+        seed=args.seed, batch_size=args.batch_size,
+        expensive_per_round=args.expensive_per_round,
+        prefilter_margin=args.prefilter_margin)
     print(json.dumps(res, indent=2, ensure_ascii=False))
     return 0 if res["reached"] else 1
 

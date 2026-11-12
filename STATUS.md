@@ -1,10 +1,28 @@
-# STATUS.md — estado del repo (v2.2.0)
+# STATUS.md — estado del repo (v2.3.0)
 
 Última actualización: 2026-11-12. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.3.0** (2026-11-12): el PREFILTRO (directiva de Arturo
+  2026-11-12 00:56 CST): el modelo propone un LOTE de deltas por
+  ronda, el proxy (puerta, no producto) los ordena en milisegundos
+  con su margen calibrado, MWIS elige un hueco caro por target, y
+  solo 1-2 ganan el paso caro (construir + medir con kickmix).
+  `auto_mvp/prefilter.py` + `auto_mvp/circuits/cost_models/dqi_cost.py`
+  (el modelo de costos DQI vendido fiel: reproduce EXACTOS los 4
+  decodificadores medidos 63/51/45/42T y el Toom-4+V1+E2 medido en
+  Kaggle Q=1,899 T=4,477,394 S=1.923348e13). Sin historial el proxy
+  no tiene señal: se explora con el mejor estimado y la medición
+  CREA el historial. Aceleradores nativos MEDIDOS (no supuestos):
+  cargan bien (spmm/field/swar), pero a estos tamaños Python gana:
+  Dijkstra nativo 59.2 ms vs Python 4.2 ms (14x) Y devuelve una
+  distancia MAL en 1/1000 nodos (236 vs 232); SpMM nativo 4.4 ms vs
+  Python 1.67 ms (2.6x) con precisión float32 (diff máx 2.4e-07).
+  Conclusión: en v2.3 las decisiones NO pasan por los nativos; se
+  usa Python (correcto y más rápido a estos tamaños) y los nativos
+  quedan para trabajo más grande, cuando se mida que ganan.
 - **v2.2.0** (2026-11-12): modelo de lenguaje GRATIS (Gemini por
   defecto, Groq de respaldo) como estratega + el Notebook saca
   SOLO SEMILLAS (JSON de kilobytes, nunca .kmx). `auto_mvp/llm.py`

@@ -1,10 +1,10 @@
-# PIPELINE.md — cómo se orquestan los flujos (v2.2.0)
+# PIPELINE.md — cómo se orquestan los flujos (v2.3.0)
 
 Guía para quien (o lo que) tenga que correr o modificar el repo sin
 leer todo el código. Todo lo que dice aquí se puede comprobar en
 `auto_mvp/` y en los tests de `tests/`.
 
-## El comando único (v2.2: el modelo propone, solo salen semillas)
+## El comando único (v2.3: el modelo propone un lote, el prefilter ordena)
 
 ```bash
 python -m auto_mvp.llm_auto --target-S 90000 --max-proposals 10
@@ -20,9 +20,13 @@ del entorno). El corredor v1.x (`python -m auto_mvp.auto --target
 
 Arturo (2026-11-12): el modelo de lenguaje GRATIS (Gemini por
 defecto, Groq de respaldo) es el ESTRATEGA: lee la mejor semilla y
-propone el siguiente movimiento (K y seed) como JSON chico. Y NO se
+propone un LOTE de movimientos (K y seed) como JSON chico. Y NO se
 construye .kmx en el Notebook: no cabe. Lo que sale son NADA MÁS
 LAS SEMILLAS (JSON de kilobytes con la receta para reconstruir el
+circuito). Directiva v2.3 (2026-11-12 00:56 CST): el prefilter
+(`auto_mvp/prefilter.py`) ordena el lote en milisegundos (proxy +
+MWIS) y solo los 1-2 mejores ganan el paso caro. El proxy es la
+puerta, no el producto: el S que cuenta es el MEDIDO.
 circuito después). La llave va en el entorno (`GEMINI_API_KEY` o
 `GROQ_API_KEY`; en Kaggle, como secreto del notebook); sin llave el
 corredor sigue con sa_windows.

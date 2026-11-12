@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.2.0"
+__version__ = "2.3.0"
 
 __all__ = [
     "Checkpoint",
@@ -127,6 +127,8 @@ __all__ = [
     "LLMError", "complete", "complete_json",
     "new_seed", "validate_seed", "save_seed", "load_seed", "list_seeds",
     "run_llm_auto",
+    "rank_deltas", "estimate_delta", "calibrate_margin",
+    "dqi_estimate_variant", "dqi_sweep",
 ]
 
 
@@ -176,4 +178,13 @@ def __getattr__(name: str):
     if name == "run_llm_auto":
         from .llm_auto import run_llm_auto
         return run_llm_auto
+    if name in ("rank_deltas", "estimate_delta", "calibrate_margin"):
+        from .prefilter import calibrate_margin, estimate_delta, rank_deltas
+        return {"rank_deltas": rank_deltas,
+                "estimate_delta": estimate_delta,
+                "calibrate_margin": calibrate_margin}[name]
+    if name in ("dqi_estimate_variant", "dqi_sweep"):
+        from .circuits.cost_models.dqi_cost import estimate_variant, sweep
+        return {"dqi_estimate_variant": estimate_variant,
+                "dqi_sweep": sweep}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

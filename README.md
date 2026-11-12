@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.2.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.3.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -12,17 +12,24 @@ no circuitos, y su éxito era tautológico. La v2.1 mide las TRES
 tareas con el protocolo oficial (invsqrt, DQI y química); la v2.2
 mete un modelo de lenguaje GRATIS (Gemini por defecto, Groq de
 respaldo) como estratega, y del Notebook salen SOLO LAS SEMILLAS
-(JSON de kilobytes con la receta): ningún .kmx, porque no cabe.
+(JSON de kilobytes con la receta): ningún .kmx, porque no cabe. La
+v2.3 mete el PREFILTRO (directiva de Arturo 2026-11-12): el modelo
+propone un LOTE por ronda, el proxy los ordena en milisegundos y
+solo 1-2 ganan el paso caro. El proxy es la puerta, no el producto.
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace (v2.2: el modelo propone, solo salen semillas)
+## Qué hace (v2.3: el modelo propone un lote, el prefilter ordena)
 
-- **Corredor con modelo (`python -m auto_mvp.llm_auto
-  --target-S 90000`):** el modelo de lenguaje gratis (Gemini por
-  defecto, Groq de respaldo; la llave va en el entorno o como
-  secreto de Kaggle, nunca en el repo) lee la mejor semilla y
-  propone el siguiente movimiento (K y seed) como JSON chico.
+- **Corredor con modelo + prefilter
+  (`python -m auto_mvp.llm_auto --target-S 90000`):** el modelo de
+  lenguaje gratis (Gemini por defecto, Groq de respaldo; la llave va
+  en el entorno o como secreto de Kaggle, nunca en el repo) lee la
+  mejor semilla y propone un LOTE de movimientos (K y seed) como
+  JSON chico. El prefilter (`auto_mvp/prefilter.py`: proxy +
+  MWIS) los ordena en milisegundos con su margen calibrado y solo
+  los 1-2 mejores llegan a kickmix. Sin historial, se explora con
+  el mejor estimado y la medición crea el historial.
   sa_windows construye el candidato en un directorio temporal que
   se BORRA; el verificador oficial decide si vale; si mejora, sale
   SOLO SU SEMILLA (`runs/seeds/invsqrt/<id>.json`, kilobytes, con
