@@ -51,7 +51,9 @@ def test_bridge_add_real():
     g = from_qualtran_bloq(Add(QUInt(4)))
     assert g.cost() == {"T": 12.0, "Q": 8}
     kids = {c.name: n for c, n in g.root.children}
-    assert kids["And"] == 3 and kids["And†"] == 3 and kids["CNOT"] == 15
+    # Qualtran 0.8.0.dev0 renombró el adjunto: "And†" pasó a "And_adj"
+    # (mismo conteo: And 3 + adjunto 3 + CNOT 15, T=12, Q=8).
+    assert kids["And"] == 3 and kids["And_adj"] == 3 and kids["CNOT"] == 15
     # El T total sale de la suma de los llamados, como en Qualtran.
     assert g.total_T() == 12.0
 

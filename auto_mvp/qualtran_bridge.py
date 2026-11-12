@@ -12,8 +12,8 @@ Este módulo es el puente:
   de Qualtran); los cúbits son los del bloque raíz (su firma), no
   la suma de los hijos.
 - ``from_qualtran_bloq``: extrae el grafo de llamadas de un Bloq
-  REAL de Qualtran (verificado contra la librería 0.7.0: Toffoli
-  T=4, Add(QUInt(4)) T=12 con And 3+3 y CNOT 15). El repo es solo
+  REAL de Qualtran (verificado contra la librería 0.8.0.dev0: Toffoli
+  T=4, Add(QUInt(4)) T=12 con And 3 + And_adj 3 y CNOT 15). El repo es solo
   stdlib, así que Qualtran se importa solo aquí, bajo demanda: sin
   Qualtran instalado, el puente trabaja con grafos construidos a
   mano (los del cost_model) y ``from_qualtran_bloq`` dice que falta
@@ -34,7 +34,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any
 
-QUALTRAN_VERSION = "0.7.0"  # la versión verificada en el venv
+QUALTRAN_VERSION = "0.8.0.dev0"  # la versión verificada en el venv
 
 
 @dataclass
@@ -174,7 +174,7 @@ def _bloq_qubits(bloq) -> int | None:
 def from_qualtran_bloq(bloq, depth: int = 10, _seen: frozenset | None = None) -> CallGraph:
     """Extrae el grafo de llamadas de un Bloq REAL de Qualtran.
 
-    Usa ``bloq.call_graph()`` (que en 0.7.0 devuelve
+    Usa ``bloq.call_graph()`` (que en 0.8.0.dev0 devuelve
     ``(DiGraph, {bloq: count})``) y ``bloq.t_complexity()``. La
     recursión baja por los llamados directos, sin el propio bloque
     (una hoja es un bloque cuyo único llamado es él mismo). Con un
