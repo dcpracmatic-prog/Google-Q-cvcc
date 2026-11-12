@@ -1,10 +1,17 @@
-# STATUS.md — estado del repo (v2.1.0)
+# STATUS.md — estado del repo (v2.2.0)
 
 Última actualización: 2026-11-12. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.2.0** (2026-11-12): modelo de lenguaje GRATIS (Gemini por
+  defecto, Groq de respaldo) como estratega + el Notebook saca
+  SOLO SEMILLAS (JSON de kilobytes, nunca .kmx). `auto_mvp/llm.py`
+  (cliente compatible OpenAI, solo stdlib, llave por entorno),
+  `auto_mvp/seed.py` (formato semilla por tarea) y
+  `auto_mvp/llm_auto.py` (corredor: el modelo propone K y seed, el
+  operador construye en temporal y se borra, el verificador decide).
 - **v2.1.0** (2026-11-12): verificación rápida para las TRES tareas
   con el protocolo oficial. `fast_verify_dqi` (hash desde el
   archivo .kmb, 2,048 shots, ~37 s) y `fast_verify_dfthcsos`
@@ -20,6 +27,29 @@ verificado en sandbox y/o en Kaggle; lo que no, dice que no.
   verificador vendidos en `auto_mvp/circuits/`.
 - Suite de tests: ver la última corrida en sandbox
   (`pytest tests/`). La v1.5.0 pasó 154/154.
+
+## Verificado (v2.2)
+
+- El modelo de lenguaje es el ESTRATEGA: propone K y seed como
+  JSON chico, nunca compuertas. Sin llave, con 429 o con JSON
+  malo, el corredor sigue con sa_windows (K rotando): la corrida
+  nunca depende del modelo.
+- **Solo salen semillas.** El circuito vive solo en temporal y se
+  borra al terminar la ronda; en `runs/` quedan solo
+  `seeds/<tarea>/<id>.json` (kilobytes) y el ledger. Los tests lo
+  comprueban: después de correr, no hay ningún .kmx en `runs/`.
+- **La semilla se reconstruye.** Re-correr sa_windows con los
+  mismos (K, seed) da el mismo circuito (test de determinismo:
+  misma ganancia y mismos bytes). Al arrancar, el corredor
+  reconstruye la mejor semilla desde su cadena de padres y la
+  MIDE: si el S no coincide (1%), vuelve a la base y lo dice.
+- **Gratis y bueno (medido en la documentación pública,
+  octubre-noviembre 2026):** Gemini Flash gratis, sin tarjeta
+  (el nivel gratis más generoso por capacidad); Groq gratis
+  (gpt-oss-120b: 30/min, 1,000/día, 200K tokens/día). La llave
+  NUNCA va en el repo: entorno (`GEMINI_API_KEY` / `GROQ_API_KEY`)
+  o secreto de Kaggle. Los límites cambian: se vuelven a mirar en
+  la consola del proveedor antes de depender de ellos.
 
 ## Verificado (v2.1)
 
@@ -60,16 +90,19 @@ verificado en sandbox y/o en Kaggle; lo que no, dice que no.
   SU CIRCUITO (`runs/best/invsqrt.kmx`) y el ledger
   (`runs/circuit_ledger.json`).
 
-## Límite honesto (lo que NO es, v2.1)
+## Límite honesto (lo que NO es, v2.2)
 
-- v2.1 mide las TRES tareas con el protocolo oficial, pero el
-  corredor (`circuit_auto.py`) solo corre **invsqrt** de punta a
-  punta. Falta extenderlo a DQI y química con sus operadores de
-  propuesta: sa_windows trabaja sobre .kmx (texto) y el DQI no se
-  puede convertir de .kmb a .kmx en sandbox (el mismo fallo de
-  `to_file` que impide el hash); la propuesta DQI tendrá que venir
-  de mutar el GENERADOR (dqi_reference_circuit.py / el builder
-  BM+Forney) y reconstruir, no de reescribir un .kmb.
+- v2.2 mide las TRES tareas con el protocolo oficial y el corredor
+  con modelo corre invsqrt de punta a punta, pero DQI y química
+  siguen sin materializador: tienen su formato de semilla, pero
+  falta el operador de propuesta DQI (mutar el generador y
+  reconstruir) y el de química (entrenar la factorización).
+- El S rápido de DQI es CONSERVADOR: con 2,048 shots el eps+
+  (0.0424) infla R (~7.5) frente al certificado a 102,400 shots
+  (R = 1.19). Dos candidatos se comparan con los MISMOS shots,
+  así que el ranking lo decide Q²×T, que es lo que importa; la
+  certificación final es el verificador oficial completo.
+- Cada propuesta sa_windows tarda ~30 s o más (una ventana) y el
 - El S rápido de DQI es CONSERVADOR: con 2,048 shots el eps+
   (0.0424) infla R (~7.5) frente al certificado a 102,400 shots
   (R = 1.19). Dos candidatos se comparan con los MISMOS shots,
@@ -97,10 +130,14 @@ verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Pendiente (decisión de Arturo)
 
-- Extender el corredor a DQI y química (v2.1 mide las tres, pero
-  solo invsqrt corre de punta a punta): falta el operador de
-  propuesta DQI (mutar el generador y reconstruir) y el de
-  química (factorización + angles), más la semilla química
+- Extender el corredor con modelo a DQI y química: falta el
+  materializador DQI (mutar el generador y reconstruir) y el de
+  química (entrenar la factorización), más la semilla química
   pública (su .npz no está en el sample_submission).
+- La llave del modelo la pone Arturo: crear la llave gratis
+  (Gemini en AI Studio o Groq en su consola, sin tarjeta) y
+  ponerla como secreto del notebook de Kaggle (`GEMINI_API_KEY`
+  o `GROQ_API_KEY`). Sin llave el corredor corre igual con
+  sa_windows.
 - La decisión pendiente de 2026-11-11 sobre los 2 PDFs borrados
   por el commit c7dbb058 sigue abierta.

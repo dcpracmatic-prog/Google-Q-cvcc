@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.1.0"
+__version__ = "2.2.0"
 
 __all__ = [
     "Checkpoint",
@@ -124,6 +124,9 @@ __all__ = [
     "run_circuit_auto",
     "fast_verify_dqi", "fast_verify_dfthcsos",
     "ensure_dfthcsos_reference_data",
+    "LLMError", "complete", "complete_json",
+    "new_seed", "validate_seed", "save_seed", "load_seed", "list_seeds",
+    "run_llm_auto",
 ]
 
 
@@ -159,4 +162,18 @@ def __getattr__(name: str):
     if name == "run_circuit_auto":
         from .circuit_auto import run_circuit_auto
         return run_circuit_auto
+    if name in ("LLMError", "complete", "complete_json"):
+        from .llm import LLMError, complete, complete_json
+        return {"LLMError": LLMError, "complete": complete,
+                "complete_json": complete_json}[name]
+    if name in ("new_seed", "validate_seed", "save_seed", "load_seed",
+                "list_seeds"):
+        from .seed import (list_seeds, load_seed, new_seed, save_seed,
+                           validate_seed)
+        return {"new_seed": new_seed, "validate_seed": validate_seed,
+                "save_seed": save_seed, "load_seed": load_seed,
+                "list_seeds": list_seeds}[name]
+    if name == "run_llm_auto":
+        from .llm_auto import run_llm_auto
+        return run_llm_auto
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

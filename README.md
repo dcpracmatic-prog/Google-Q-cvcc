@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.1.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.2.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -9,15 +9,27 @@ llegar a la meta o hasta que se cancele el script. Si no es un
 circuito válido, no cuenta, no es nada. Los números sueltos de la
 v1.x (GM 30.0056) no sirven: el corredor v1.x optimizaba métricas,
 no circuitos, y su éxito era tautológico. La v2.1 mide las TRES
-tareas con el protocolo oficial (invsqrt, DQI y química); el
-corredor de punta a punta sigue siendo invsqrt (DQI y química
-pendientes de su operador de propuesta).
+tareas con el protocolo oficial (invsqrt, DQI y química); la v2.2
+mete un modelo de lenguaje GRATIS (Gemini por defecto, Groq de
+respaldo) como estratega, y del Notebook salen SOLO LAS SEMILLAS
+(JSON de kilobytes con la receta): ningún .kmx, porque no cabe.
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace (v2.0: circuitos)
+## Qué hace (v2.2: el modelo propone, solo salen semillas)
 
-- **Corredor de circuitos (`python -m auto_mvp.circuit_auto
+- **Corredor con modelo (`python -m auto_mvp.llm_auto
+  --target-S 90000`):** el modelo de lenguaje gratis (Gemini por
+  defecto, Groq de respaldo; la llave va en el entorno o como
+  secreto de Kaggle, nunca en el repo) lee la mejor semilla y
+  propone el siguiente movimiento (K y seed) como JSON chico.
+  sa_windows construye el candidato en un directorio temporal que
+  se BORRA; el verificador oficial decide si vale; si mejora, sale
+  SOLO SU SEMILLA (`runs/seeds/invsqrt/<id>.json`, kilobytes, con
+  la receta para reconstruir el circuito después). Ningún .kmx
+  sale del Notebook: no cabe. Sin llave o con límite (429), el
+  corredor sigue con sa_windows y lo anota.
+- **Corredor de circuitos v2.0 (`python -m auto_mvp.circuit_auto
   --target-S 90000`):** propone circuitos reales con sa_windows
   (el operador de Arturo, vendido en
   `auto_mvp/circuits/operators/`), los VALIDA con el protocolo

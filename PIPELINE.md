@@ -1,13 +1,13 @@
-# PIPELINE.md — cómo se orquestan los flujos (v2.1.0)
+# PIPELINE.md — cómo se orquestan los flujos (v2.2.0)
 
 Guía para quien (o lo que) tenga que correr o modificar el repo sin
 leer todo el código. Todo lo que dice aquí se puede comprobar en
 `auto_mvp/` y en los tests de `tests/`.
 
-## El comando único (v2.0: circuitos)
+## El comando único (v2.2: el modelo propone, solo salen semillas)
 
 ```bash
-python -m auto_mvp.circuit_auto --target-S 90000 --max-proposals 10
+python -m auto_mvp.llm_auto --target-S 90000 --max-proposals 10
 ```
 
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): fuerza bruta sobre
@@ -17,6 +17,36 @@ y repite hasta la meta o hasta el límite que ponga quien ejecuta.
 Necesita kickmix + numpy (vienen del dataset de la competencia y
 del entorno). El corredor v1.x (`python -m auto_mvp.auto --target
 30`, solo stdlib) se mantiene por compatibilidad, superado.
+
+Arturo (2026-11-12): el modelo de lenguaje GRATIS (Gemini por
+defecto, Groq de respaldo) es el ESTRATEGA: lee la mejor semilla y
+propone el siguiente movimiento (K y seed) como JSON chico. Y NO se
+construye .kmx en el Notebook: no cabe. Lo que sale son NADA MÁS
+LAS SEMILLAS (JSON de kilobytes con la receta para reconstruir el
+circuito después). La llave va en el entorno (`GEMINI_API_KEY` o
+`GROQ_API_KEY`; en Kaggle, como secreto del notebook); sin llave el
+corredor sigue con sa_windows.
+
+## El flujo del corredor con modelo (`auto_mvp/llm_auto.py`)
+
+1. **Semilla medida.** El ledger (`runs/seed_ledger.json`) parte de
+   la mejor semilla guardada en `runs/seeds/invsqrt/` (o de la base
+   vendida, medida: S ≈ 100,568.5). La semilla es solo un JSON con
+   su receta; el circuito se reconstruye desde su cadena de padres
+   y se MIDE al arrancar (si no mide como la semilla, se vuelve a
+   la base).
+2. **Propuesta del modelo.** El estratega recibe la mejor semilla +
+   lo ya probado y devuelve `{"K": 5|6|7, "seed": N, "reason": ...}`.
+   Sin llave, con 429 o con JSON malo: sa_windows con K rotando.
+3. **Construcción en temporal.** sa_windows construye el candidato
+   en un directorio temporal, que se BORRA al terminar la ronda.
+4. **Validación y medición.** Como en v2.0/v2.1: el verificador
+   oficial vendido, con menos shots. Si es inválido, no cuenta.
+5. **Solo sale la semilla.** Si mejora, se guarda SOLO su semilla
+   (`runs/seeds/invsqrt/<id>.json`, kilobytes) con la receta
+   (base + K + seed + budget). Ningún .kmx sale del Notebook.
+6. **Repetición.** Solo paran la meta, el límite de propuestas o
+   el presupuesto de tiempo. Nunca por estancamiento.
 
 ## El flujo del corredor de circuitos (`auto_mvp/circuit_auto.py`)
 
