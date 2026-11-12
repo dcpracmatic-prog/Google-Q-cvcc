@@ -256,6 +256,42 @@ def validate_submission(path: str | Path,
     return out
 
 
+def combine_best(target_gm: float = 30.0,
+                 runs_dir: str | Path | None = None,
+                 export: bool = False) -> dict[str, Any]:
+    """La guía: el mejor por tarea, entre corridas, contra el objetivo.
+
+    Entrada: el puntaje objetivo (meta_mvp, ej. 30.00) y el
+    directorio de runs (su best_per_task.json guarda el mejor por
+    tarea entre corridas). Salida: la GM de la mejor combinación,
+    si llega al objetivo, qué componente trae cada tarea (con su
+    procedencia: corrida, iteración, medido o proyectado) y cuánto
+    le falta a cada tarea. Con export=True y el objetivo alcanzado,
+    escribe el ZIP de auditoría con los tres componentes.
+    Es una GUÍA: la GM es una estimación con la fórmula oficial,
+    no un puntaje medido, y el ZIP es para auditar, no el
+    submission.zip de la competencia.
+    """
+    from .combiner import BestLedger, combine, export_audit_zip
+    tmp = tempfile.TemporaryDirectory() if runs_dir is None else None
+    try:
+        root = Path(runs_dir) if runs_dir is not None else Path(tmp.name)
+        ledger = BestLedger(root / "best_per_task.json")
+        out = combine(ledger, target_gm)
+        out["ledger"] = str(ledger.path)
+        if export and out["reached"]:
+            audit = export_audit_zip(
+                ledger,
+                root / f"audit-base-{out['gm']:.2f}.zip",
+                dataset_root=root / "dataset", target_gm=target_gm)
+            out["audit_zip"] = audit["path"]
+            out["audit_files"] = audit["files"]
+        return out
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
 OPERATIONS = {
     "evaluate_candidate": evaluate_candidate,
     "apply_morph_tunnel": apply_morph_tunnel,
@@ -264,5 +300,6 @@ OPERATIONS = {
     "check_integrity": check_integrity,
     "export_module": export_module,
     "validate_submission": validate_submission,
+    "combine_best": combine_best,
     "promotion_gate": promotion_gate,
 }

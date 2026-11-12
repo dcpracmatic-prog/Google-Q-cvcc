@@ -152,6 +152,23 @@ circuito DQI kickmix no es un Bloq de Qualtran.
   proxy, puerta de promoción por GM estimada (bate el mejor envío
   23.94667), artefactos `i<iter>-<score>`, reanudación por estado, y
   `kaggle_init` con la separación inmutable / código / trabajo.
+- **v1.0.0** — **La guía: el mejor por tarea, entre corridas.**
+  El auto-optimizador es una GUÍA, no un compilador ni un
+  validador. Un ledger persistente (`runs/best_per_task.json`)
+  guarda el mejor componente por tarea ENTRE corridas (la corrida
+  1 puede traer el mejor invsqrt y la corrida 2 el mejor DQI: la
+  combinación toma el mejor de cada tarea, venga de la corrida que
+  venga; solo mejora, y cada reemplazo queda en el historial con
+  su procedencia). Dado un objetivo (ej. 30.00), `combine_best`
+  dice si la combinación llega y cuánto le falta a CADA tarea (el
+  DQI necesitaría S 1.9162e11, 127.3x). Cuando llega, exporta la
+  base de auditoría en un ZIP (`audit-base-<gm>.zip`) con los tres
+  componentes y un manifest.json con su procedencia, para auditar
+  y diseñar el submission real. El pipeline alimenta el ledger al
+  promover y exporta la base cuando la combinación llega al
+  objetivo. Operación nueva en la Skill: `combine_best` (CLI, MCP,
+  tools.py, functions.json: 9 operaciones). Tests 6/6 nuevos,
+  110/110 en total.
 - **v0.9.1** — **La síntesis de rotaciones en el costo invsqrt
   (fail-closed).** El proxy ya no ignora el costo de síntesis de
   rotaciones Z_POW finas: la fórmula es la del verificador oficial

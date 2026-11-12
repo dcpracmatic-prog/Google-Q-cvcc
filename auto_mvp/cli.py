@@ -12,6 +12,7 @@ funciones para ChatGPT/Grok; ver auto_mvp/operations.py):
     integrity  pasa el filtro de integridad sobre una evidencia
     export     exporta e inyecta un módulo promovido al dataset de trabajo
     validate   valida el formato de un submission.zip (o su directorio)
+    combine    la guía: el mejor por tarea, entre corridas, contra el objetivo
     gate       la puerta de promoción (GM, DQI necesario, S objetivo)
     version    la versión del paquete
 
@@ -26,9 +27,9 @@ import sys
 
 from . import __version__
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
-                         decode_json_config, evaluate_candidate,
-                         export_module, promotion_gate, run_orchestrator,
-                         validate_submission)
+                         combine_best, decode_json_config,
+                         evaluate_candidate, export_module, promotion_gate,
+                         run_orchestrator, validate_submission)
 
 
 def _load(path: str | None) -> dict:
@@ -86,6 +87,14 @@ def main(argv: list[str] | None = None) -> int:
                         "(ej. '{\"invsqrt\": \"PASS\", ...}'), si se quiere "
                         "la puerta fail-closed completa")
 
+    c = add("combine", "la guía: el mejor por tarea contra el objetivo")
+    c.add_argument("--target", type=float, default=30.0,
+                   help="puntaje objetivo (meta_mvp, por defecto 30.00)")
+    c.add_argument("--runs-dir", default=None,
+                   help="directorio de runs (su best_per_task.json)")
+    c.add_argument("--export", action="store_true",
+                   help="si el objetivo se alcanza, escribe el ZIP de auditoría")
+
     g = add("gate", "la puerta de promoción")
     g.add_argument("--meta-mvp", type=float, default=30.0)
     g.add_argument("--S", dest="S", default=None,
@@ -125,6 +134,9 @@ def main(argv: list[str] | None = None) -> int:
         elif args.op == "validate":
             tasks = json.loads(args.tasks) if args.tasks else None
             out = validate_submission(args.path, task_statuses=tasks)
+        elif args.op == "combine":
+            out = combine_best(args.target, runs_dir=args.runs_dir,
+                               export=args.export)
         elif args.op == "gate":
             s = json.loads(args.S) if args.S else None
             out = promotion_gate(args.meta_mvp, S=s)

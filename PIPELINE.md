@@ -118,6 +118,24 @@ H2_I, H1_I, Hsym_lower, tree_edges). `submission_ready` da READY
 solo si la puerta fail-closed Y el formato pasan. El validador
 revisa el FORMATO, no el contenido.
 
+### La guía: el mejor por tarea, entre corridas (v1.0.0)
+
+El auto-optimizador es una GUÍA, no un compilador ni un validador.
+Un ledger persistente (`runs/best_per_task.json`, sembrado con el
+mejor envío medido) guarda el mejor componente por tarea ENTRE
+corridas: la corrida 1 puede traer el mejor invsqrt y la corrida 2
+el mejor DQI; la combinación toma el mejor de cada tarea, venga de
+la corrida que venga. Solo mejora: un S peor no borra el mejor, y
+cada reemplazo queda en el historial con su procedencia (corrida,
+iteración, medido o proyectado). Dado un objetivo (meta_mvp, ej.
+30.00), la combinación dice si llega y cuánto le falta a CADA
+tarea (el S que cada una necesitaría, con las otras dos fijas).
+Cuando llega, se exporta la base de auditoría en un ZIP
+(`audit-base-<gm>.zip`) con los tres componentes y un
+manifest.json con su procedencia, para auditar y diseñar el
+submission real. El ZIP de auditoría NO es el submission.zip de
+la competencia.
+
 ## El ciclo asíncrono (6 h / 24 h)
 
 Kaggle limita la duración de una corrida de notebook, así que el

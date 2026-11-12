@@ -1,6 +1,6 @@
 # Operaciones de la skill auto-mvp-vqcc
 
-Las 8 operaciones reales del repo (`auto_mvp/operations.py`). Todas
+Las 9 operaciones reales del repo (`auto_mvp/operations.py`). Todas
 reciben y devuelven JSON. El punto de entrada es el mismo por CLI
 (`python -m auto_mvp.cli <op>`), MCP (`tools/call`) y funciones
 (`tools.py` / `functions.json`).
@@ -155,6 +155,38 @@ Un ZIP con duplicados (invsqrt.kmb y invsqrt.kmx), con huecos en
 angle_k (0 y 2 sin 1), con directorio raíz extra, o con un NPZ sin
 la clave tree_edges, da `ok: false` con su motivo. El validador
 revisa el FORMATO, no el contenido.
+
+## combine_best
+
+La guía (v1.0.0): junta el mejor componente por tarea (entre
+corridas) y dice si la combinación llega al puntaje objetivo.
+Entrada: el objetivo (meta_mvp) y el directorio de runs (su
+best_per_task.json). Salida: la GM de la mejor combinación, si
+llega al objetivo, qué componente trae cada tarea (con su
+procedencia: corrida, iteración, medido o proyectado) y cuánto le
+falta a cada tarea.
+
+```json
+{
+  "target": 30.0, "gm": 23.94676, "reached": false, "projected": false,
+  "components": {
+    "invsqrt": {"name": "invsqrt-propio-certificado", "kind": "best_submission",
+                "S": 100568.5, "measured": true, "run_id": "best-submission-58076483"},
+    "dqi": {"name": "dqi-publico-hibrido", "kind": "best_submission",
+            "S": 376760000000.0, "measured": true, "run_id": "best-submission-58076483"},
+    "dfthcsos": {"name": "quimica-publica", "kind": "best_submission",
+                 "S": 326800029.87, "measured": true, "run_id": "best-submission-58076483"}},
+  "required": {
+    "dqi": {"current_S": 376760000000.0, "required_S": 191620236800.86,
+            "ratio_needed": 127.335, "current_ratio": 64.763}}
+}
+```
+
+Con `export=True` y el objetivo alcanzado, escribe el ZIP de
+auditoría (`audit-base-<gm>.zip`) con los tres componentes y un
+manifest.json. Es una GUÍA: la GM es una estimación con la fórmula
+oficial, no un puntaje medido, y el ZIP es para auditar, no el
+submission.zip de la competencia.
 
 ## promotion_gate
 

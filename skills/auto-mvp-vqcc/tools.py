@@ -26,6 +26,7 @@ except ImportError:
 
 from auto_mvp.operations import (apply_morph_tunnel as _apply_morph_tunnel,
                                  check_integrity as _check_integrity,
+                                 combine_best as _combine_best,
                                  decode_json_config as _decode_json_config,
                                  evaluate_candidate as _evaluate_candidate,
                                  export_module as _export_module,
@@ -41,6 +42,7 @@ __all__ = [
     "check_integrity",
     "export_module",
     "validate_submission",
+    "combine_best",
     "promotion_gate",
 ]
 
@@ -89,6 +91,12 @@ def validate_submission(path: str,
                         mode: str = "full") -> dict[str, Any]:
     """Valida el formato de un submission.zip (o su directorio)."""
     return _validate_submission(path, task_statuses=task_statuses, mode=mode)
+
+
+def combine_best(target_gm: float = 30.0, runs_dir: str | None = None,
+                 export: bool = False) -> dict[str, Any]:
+    """La guía: el mejor por tarea, entre corridas, contra el objetivo."""
+    return _combine_best(target_gm, runs_dir=runs_dir, export=export)
 
 
 def promotion_gate(meta_mvp: float = 30.0,

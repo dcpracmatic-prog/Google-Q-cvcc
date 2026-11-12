@@ -156,6 +156,25 @@ TOOLS = [
         },
     },
     {
+        "name": "combine_best",
+        "description": ("La guía: junta el mejor componente por tarea "
+                        "(entre corridas) y dice si la combinación llega "
+                        "al puntaje objetivo, cuánto le falta a cada tarea "
+                        "y, si llega, exporta los tres en un ZIP de auditoría."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "target_gm": {"type": "number",
+                              "description": "puntaje objetivo (meta_mvp, por defecto 30.00)"},
+                "runs_dir": {"type": "string",
+                             "description": "directorio de runs (su best_per_task.json)"},
+                "export": {"type": "boolean",
+                           "description": "si el objetivo se alcanza, escribe el ZIP de auditoría"},
+            },
+            "required": [],
+        },
+    },
+    {
         "name": "promotion_gate",
         "description": ("La puerta de promoción: lo que exige meta_mvp "
                         "(ratio DQI necesario, S objetivo) y, con S, la GM."),

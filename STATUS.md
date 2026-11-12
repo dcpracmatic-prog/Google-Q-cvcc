@@ -1,7 +1,24 @@
-# STATUS.md — estado del repo (v0.9.1, 2026-11-11)
+# STATUS.md — estado del repo (v1.0.0, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v1.0.0 — la guía: el mejor por tarea, entre corridas.** El
+  auto-optimizador es una GUÍA, no un compilador ni un validador.
+  Un ledger persistente (`runs/best_per_task.json`) guarda el mejor
+  componente por tarea ENTRE corridas (solo mejora; cada reemplazo
+  queda en el historial con su procedencia: corrida, iteración,
+  medido o proyectado). Dado un objetivo (ej. 30.00), `combine_best`
+  dice si la combinación llega y cuánto le falta a CADA tarea (el
+  DQI necesitaría S 1.9162e11, 127.3x; el invsqrt, S 51,149). Cuando
+  llega, exporta la base de auditoría en un ZIP
+  (`audit-base-<gm>.zip`) con los tres componentes y un
+  manifest.json con su procedencia. Con la semilla (el mejor envío,
+  GM 23.94676), 30.00 no se alcanza; con un DQI mejor (S 2.0e11)
+  en una corrida y un invsqrt mejor (S 50,000) en otra, la
+  combinación llega a GM 37.33. El pipeline alimenta el ledger al
+  promover y exporta la base cuando la combinación llega al
+  objetivo. Operación nueva en la Skill: `combine_best`
+  (9 operaciones). Tests 6/6 nuevos; suite completa 110/110.
 - **v0.9.1 — la síntesis de rotaciones en el costo invsqrt
   (fail-closed).** El proxy ya no ignora el costo de síntesis de
   rotaciones Z_POW finas: la fórmula es la del verificador oficial

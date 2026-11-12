@@ -4,7 +4,7 @@ description: Optimiza candidatos de la competencia Google Quantum AI Verifiable 
 license: Apache-2.0
 compatibility: Python >=3.10, solo stdlib (el paquete auto_mvp no tiene dependencias). Qualtran es opcional (solo para extraer Bloqs reales). Funciona en Kaggle Code (snapshot vendido), Claude con terminal (MCP o CLI), ChatGPT Code Interpreter y Grok (functions.json + tools.py).
 metadata:
-  version: "0.9.0"
+  version: "1.0.0"
   repo: dcpracmatic-prog/Google-Q-cvcc (PRIVADO)
   author: Arturo Salvador Balderas Hernández
 ---
@@ -53,8 +53,33 @@ python -m auto_mvp.cli run --in config.json --candidates cands.json --best-S '{"
 python -m auto_mvp.cli integrity --in evidencia.json
 python -m auto_mvp.cli export --in record.json --runs-dir runs
 python -m auto_mvp.cli validate --path submission.zip
+python -m auto_mvp.cli combine --target 30 --runs-dir runs --export
 python -m auto_mvp.cli gate --meta-mvp 30
 ```
+
+## La guía: el mejor por tarea, entre corridas (v1.0.0)
+
+El auto-optimizador es una **guía**, no un compilador ni un
+validador. Su trabajo es juntar la base de las tres tareas que
+sumen el puntaje pedido, y exportarla para auditarla:
+
+- El mejor por tarea se guarda en `runs/best_per_task.json`,
+  ENTRE corridas. La corrida 1 puede traer el mejor invsqrt y la
+  corrida 2 el mejor DQI: la combinación toma el mejor de cada
+  tarea, venga de la corrida que venga. Solo mejora: un S peor no
+  borra el mejor, y cada reemplazo queda en el historial con su
+  procedencia (corrida, iteración, medido o proyectado).
+- Dado un objetivo (ej. 30.00), `combine_best` dice si la
+  combinación llega, y si no, cuánto le falta a CADA tarea (el S
+  que cada una necesitaría, con las otras dos fijas). Ese es el
+  mapa: qué hay que mejorar y cuánto.
+- Cuando la combinación llega al objetivo, se exporta la base de
+  auditoría en un ZIP (`audit-base-<gm>.zip`): los tres
+  componentes (estructura + código ejecutable cuando existen en
+  el dataset, o sus métricas y procedencia) y un manifest.json con
+  el objetivo, la GM y de dónde salió cada componente. El ZIP es
+  para auditar y diseñar el submission real, NO el submission.zip
+  de la competencia (ese lo arma la puerta fail-closed).
 
 ## Formato del submission.zip (v0.9.0)
 
@@ -110,6 +135,7 @@ export.
 | `check_integrity` | filtro de integridad obligatorio | evidencia JSON | ok, motivos |
 | `export_module` | exporta e inyecta un módulo al dataset | record promovido | rutas, grafo, código (structure.json + module.py) |
 | `validate_submission` | valida el formato del submission.zip | ruta del ZIP o directorio | ok, motivos, ángulos, claves del NPZ, READY/NOT_CREATED |
+| `combine_best` | la guía: el mejor por tarea, entre corridas, contra el objetivo | objetivo (+ runs_dir) | GM, si llega, qué trae cada tarea, cuánto falta, ZIP de auditoría |
 | `promotion_gate` | lo que exige meta_mvp | meta_mvp (+ S) | ratio DQI necesario, S objetivo, GM |
 
 ## Reglas honestas (no negociables)

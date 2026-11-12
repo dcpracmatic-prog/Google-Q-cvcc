@@ -234,6 +234,10 @@ class PipelineResult:
     # v0.8.0: módulos exportados al dataset de trabajo.
     exported: int = 0
     dataset_dir: str = ""
+    # v1.0.0: la guía (el mejor por tarea, entre corridas).
+    combined_gm: float | None = None
+    target_reached: bool = False
+    audit_zip: str = ""
 
 
 class Pipeline:
@@ -285,7 +289,8 @@ class Pipeline:
                  observe_every: int = 50,
                  max_consecutive_compile_failures: int = 3,
                  meta_mvp: float | None = None,
-                 tunnel_engine: Any | None = None):
+                 tunnel_engine: Any | None = None,
+                 run_id: str | None = None):
         self.proxy = proxy
         # Motor de tunelamiento MORPH (v0.6.0): si se pasa, el paso
         # "tunnel" del orquestador adaptativo lo usa para transformar
@@ -304,6 +309,15 @@ class Pipeline:
         # código ejecutable (nunca en /kaggle/input, que es intocable).
         from .dataset import WorkingDataset
         self.dataset = WorkingDataset(self.runs_dir / "dataset")
+        # La guía (v1.0.0): el mejor por tarea, guardado entre
+        # corridas. La corrida 1 puede traer el mejor invsqrt y la
+        # corrida 2 el mejor DQI: la combinación los junta. Se
+        # siembra con el mejor envío (medido).
+        from datetime import datetime, timezone
+        self.run_id = run_id or datetime.now(timezone.utc).strftime(
+            "run-%Y%m%d-%H%M")
+        from .combiner import BestLedger
+        self.ledger = BestLedger(self.runs_dir / "best_per_task.json")
         self.compile_fn = compile_fn
         self.time_budget_seconds = time_budget_seconds
         self.source_commit = source_commit
@@ -448,6 +462,28 @@ class Pipeline:
                 record, dest, self.dataset.root)
         except Exception as e:  # el export no debe matar la promoción
             record["export"] = {"error": str(e)}
+        # v1.0.0 (la guía): el módulo promovido entra al ledger del
+        # mejor por tarea, solo si es un CANDIDATO real (un target es
+        # una hipótesis, no un componente). Su S es una estimación
+        # del proxy (measured=False); el S medido solo entra por un
+        # record explícito tras el verificador oficial.
+        try:
+            task = record.get("task")
+            S = (record.get("S") or {}).get(task) if task else None
+            if (record.get("kind") == "candidate" and task and S
+                    and "error" not in (record.get("export") or {})):
+                record["ledger"] = self.ledger.record(task, {
+                    "name": record.get("name") or f"i{record['iteration']}",
+                    "kind": "candidate", "S": float(S),
+                    "metrics": record.get("metrics", {}),
+                    "artifact_name": record["artifact_name"],
+                    "run_id": self.run_id,
+                    "iteration": record["iteration"],
+                    "measured": False,
+                    "source_commit": self.source_commit or None,
+                })
+        except Exception as e:  # el ledger no debe matar la promoción
+            record["ledger"] = {"error": str(e)}
         if self.mode == Autonomy.PROPOSE:
             return str(dest), False
         if self.compile_fn is not None:
@@ -608,6 +644,7 @@ class Pipeline:
             record = {"iteration": self.iteration, "gm": gate_v.gm,
                       "S": cand_S, "ratios": gate_v.ratios,
                       "task": meta.task, "kind": kind,
+                      "name": candidate.get("name", ""),
                       "meta": candidate.get("meta"),
                       "metrics": candidate.get("metrics", {}),
                       # v0.8.0: la estructura completa y el código del
@@ -641,6 +678,21 @@ class Pipeline:
         self._observe()
         self.state["best_gm"] = best_gm
         self._save_state()
+        # v1.0.0 (la guía): la mejor combinación de las tres tareas
+        # (el mejor por tarea, venga de la corrida que venga). Si
+        # llega al objetivo, se exporta la base de auditoría en un
+        # ZIP, para auditar los tres componentes antes de diseñar
+        # el submission real.
+        from .combiner import combine, export_audit_zip
+        combo = combine(self.ledger, self.gate.meta_mvp)
+        audit_zip = ""
+        if combo["reached"]:
+            audit = export_audit_zip(
+                self.ledger,
+                self.runs_dir / f"audit-base-{combo['gm']:.2f}.zip",
+                dataset_root=self.dataset.root,
+                target_gm=self.gate.meta_mvp)
+            audit_zip = audit["path"]
         return PipelineResult(
             screened=screened, proxy_rejected=proxy_rejected,
             gate_rejected=gate_rejected, promoted=promoted,
@@ -656,4 +708,7 @@ class Pipeline:
                           and best_kind == "candidate"),
             meta_mvp=self.gate.meta_mvp,
             exported=exported,
-            dataset_dir=str(self.dataset.root))
+            dataset_dir=str(self.dataset.root),
+            combined_gm=combo["gm"],
+            target_reached=combo["reached"],
+            audit_zip=audit_zip)
