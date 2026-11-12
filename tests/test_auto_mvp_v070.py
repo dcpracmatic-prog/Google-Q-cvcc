@@ -7,7 +7,7 @@ resultados del repo:
   tunnel -> T 1,511,522 -> 1,315,731; run -> promovido 1, tunelado 1).
 - Servidor MCP: initialize + tools/list + tools/call dan lo mismo.
 - tools.py (ChatGPT/Grok): las funciones dan lo mismo.
-- functions.json: esquema válido, 6 funciones, mismos nombres.
+- functions.json: esquema válido, 12 funciones, mismos nombres.
 - La skill: mcp_server.py, tools.py, functions.json (el código).
   El único markdown del repo es README.md, que describe cómo
   funciona y qué hace.
@@ -60,7 +60,17 @@ def _cli(*args, inp=None, cwd=None):
 
 
 def test_cli_version_and_gate():
-    assert _cli("version")["version"] == "1.1.0"
+    # La versión del CLI, la del paquete y la de pyproject son la
+    # misma: si una se queda atrás, este test lo dice (antes el
+    # literal era "1.1.0" y se pudrió al subir a 1.5.0).
+    import tomllib
+
+    from auto_mvp import __version__
+
+    pyproject_version = tomllib.loads(
+        (REPO / "pyproject.toml").read_text(encoding="utf-8")
+    )["project"]["version"]
+    assert _cli("version")["version"] == __version__ == pyproject_version
     g = _cli("gate", "--meta-mvp", "30")
     assert abs(g["required_dqi_ratio"] - 127.335) < 0.01
     assert abs(g["target_S_dqi"] - 1.916e11) / 1.916e11 < 1e-3
