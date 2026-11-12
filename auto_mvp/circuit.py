@@ -380,7 +380,8 @@ def fast_verify_invsqrt(path: str | Path, *, max_x: int = 1024,
 
 def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
                        log_path: str | Path, *, K: int = 5,
-                       budget_s: float = 60.0, seed: int = 1
+                       budget_s: float = 60.0, seed: int = 1,
+                       peephole: bool = True
                        ) -> dict[str, Any]:
     """Un candidato real con sa_windows (el operador de Arturo).
 
@@ -389,21 +390,43 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
     operador corrió y la ganancia que reporta su log (0 si no encontró
     nada: la semilla ya es óptima para esas ventanas, y eso también
     es un resultado medido, no un fallo).
+
+    Con peephole=True (v2.4, por defecto), antes de correr el SA se
+    pasa la ruta Fast de GUOQ (auto_mvp/circuits/operators/peephole):
+    fusiona Z_POW adyacentes y cancela pares Clifford idénticos, con
+    reescrituras exactas sobre el .kmx real. Es determinista e
+    idempotente, así que la receta (K, seed) sigue reconstruyendo lo
+    mismo, y su ganancia se reporta aparte ("peephole"). En la
+    semilla invsqrt quita 44 compuertas Clifford (18 pares CX + 4 X)
+    sin cambiar el S medido (las Clifford no cuentan en C).
     """
-    cmd = [sys.executable, str(SA_WINDOWS), str(seed_path), str(out_path),
+    src = Path(seed_path)
+    peephole_stats: dict[str, int] = {"removed": 0, "zpow_fused": 0,
+                                      "zpow_removed": 0,
+                                      "pairs_cancelled": 0}
+    if peephole:
+        from .circuits.operators.peephole import clean_file
+        tmp_clean = Path(out_path).with_name(
+            Path(out_path).stem + ".peephole.kmx")
+        peephole_stats = clean_file(src, tmp_clean)
+        src = tmp_clean
+    cmd = [sys.executable, str(SA_WINDOWS), str(src), str(out_path),
            str(log_path), str(int(K)), str(float(budget_s)), str(int(seed))]
     try:
         proc = subprocess.run(cmd, capture_output=True, text=True,
                               timeout=float(budget_s) + 180)
     except subprocess.TimeoutExpired:
-        return {"ok": False, "gain": 0, "reason": "sa_windows excedió su tiempo"}
+        return {"ok": False, "gain": 0, "reason": "sa_windows excedió su tiempo",
+                "peephole": peephole_stats}
     if proc.returncode != 0:
         return {"ok": False, "gain": 0,
-                "reason": (proc.stderr or proc.stdout or "sa_windows falló")[:300]}
+                "reason": (proc.stderr or proc.stdout or "sa_windows falló")[:300],
+                "peephole": peephole_stats}
     gain = 0
     try:
         gain = int(json.loads(Path(log_path).read_text(
             encoding="utf-8")).get("gain_total", 0))
     except Exception:
         gain = 0
-    return {"ok": True, "gain": gain, "reason": ""}
+    return {"ok": True, "gain": gain, "reason": "",
+            "peephole": peephole_stats}

@@ -376,6 +376,7 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                     "proposal": i, "K": K, "seed": op_seed, "llm": llm_ok,
                     "reason_llm": reason, "operator": "sa_windows",
                     "gain_reported": prop.get("gain", 0),
+                    "peephole": prop.get("peephole", {}),
                     "prefilter_S_est": verdict.s_estimate,
                     "prefilter": ("exploración sin historial"
                                   if explored else "ganador del prefilter")}

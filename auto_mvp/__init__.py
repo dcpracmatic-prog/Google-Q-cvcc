@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.3.0"
+__version__ = "2.4.0"
 
 __all__ = [
     "Checkpoint",
@@ -129,6 +129,8 @@ __all__ = [
     "run_llm_auto",
     "rank_deltas", "estimate_delta", "calibrate_margin",
     "dqi_estimate_variant", "dqi_sweep",
+    "peephole_clean", "clean_peephole_file",
+    "eea_trace", "dialog_bezout", "playback",
 ]
 
 
@@ -187,4 +189,12 @@ def __getattr__(name: str):
         from .circuits.cost_models.dqi_cost import estimate_variant, sweep
         return {"dqi_estimate_variant": estimate_variant,
                 "dqi_sweep": sweep}[name]
+    if name in ("peephole_clean", "clean_peephole_file"):
+        from .circuits.operators.peephole import clean_file, peephole_clean
+        return {"peephole_clean": peephole_clean,
+                "clean_peephole_file": clean_file}[name]
+    if name in ("eea_trace", "dialog_bezout", "playback"):
+        from .circuits.dialog import dialog_bezout, eea_trace, playback
+        return {"eea_trace": eea_trace, "dialog_bezout": dialog_bezout,
+                "playback": playback}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

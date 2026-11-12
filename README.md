@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.3.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.4.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -16,10 +16,16 @@ respaldo) como estratega, y del Notebook salen SOLO LAS SEMILLAS
 v2.3 mete el PREFILTRO (directiva de Arturo 2026-11-12): el modelo
 propone un LOTE por ronda, el proxy los ordena en milisegundos y
 solo 1-2 ganan el paso caro. El proxy es la puerta, no el producto.
+La v2.4 mete la herramienta con lo que sirve de lo revisado: el
+PEEPHOLE (ruta Fast de GUOQ, bien hecha sobre el .kmx real: quita
+44 Clifford de la semilla invsqrt, S idéntico) y el DIALOG (la traza
+algebraica correcta + playback, 200/200 casos contra el EEA
+explícito).
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace (v2.3: el modelo propone un lote, el prefilter ordena)
+## Qué hace (v2.4: el modelo propone un lote, el prefilter ordena,
+el peephole limpia antes del paso caro)
 
 - **Corredor con modelo + prefilter
   (`python -m auto_mvp.llm_auto --target-S 90000`):** el modelo de

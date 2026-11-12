@@ -1,10 +1,38 @@
-# STATUS.md — estado del repo (v2.3.0)
+# STATUS.md — estado del repo (v2.4.0)
 
 Última actualización: 2026-11-12. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.4.0** (2026-11-12): LA HERRAMIENTA, con lo que sirve de lo
+  revisado (directiva de Arturo 2026-11-12 01:56 CST: crear la
+  herramienta en GitHub, usar lo que sirva, que trate de dar mejores
+  resultados). Dos piezas nuevas, ambas hechas BIEN (sobre los
+  formatos reales, verificadas contra lo oficial):
+  - **PEEPHOLE** (`auto_mvp/circuits/operators/peephole.py`): la
+    ruta Fast de GUOQ (especificación Capa 3) — fusión de Z_POW
+    adyacentes + cancelación de pares Clifford idénticos, con
+    reescrituras EXACTAS sobre el .kmx real. En la semilla invsqrt
+    quita 44 compuertas (18 pares CX + 4 X) y el S medido NO cambia
+    (las Clifford no cuentan en C); la validez la confirma el
+    verificador oficial (S idéntico 100,585.37). Integrado como
+    pre-paso determinista de `propose_sa_windows` (la receta
+    (K, seed) sigue reconstruyendo lo mismo).
+  - **DIALOG** (`auto_mvp/circuits/dialog.py`): la traza algebraica
+    (cocientes del EEA) + playback reconstruyen los coeficientes de
+    Bézout sin haberlos guardado. 200/200 casos aleatorios: el
+    playback es idéntico al EEA explícito (completo y ecuación
+    clave), y sigma·S = omega (mod z^2l). Los scripts
+    quantum_circuit_optimizer v1-v3 NO implementan esto (su
+    "Dialog" es un playback de vector de estado con matrices 2x2
+    que no representan las compuertas de varios qubits). Veredicto
+    para OPI: en GF(2^b) con n<<m gana el EXPLÍCITO (Chien con QC
+    es Clifford, gratis); Dialog gana solo en campos primos o si
+    el EEA domina. La U-Net (Capa 2) y el GUOQ Slow (Capa 3) de la
+    especificación siguen sin existir: la U-Net necesita datos de
+    entrenamiento etiquetados (qué regiones son reducibles) que no
+    existen; el Slow es sa_windows, que ya está.
 - **v2.3.0** (2026-11-12): el PREFILTRO (directiva de Arturo
   2026-11-12 00:56 CST): el modelo propone un LOTE de deltas por
   ronda, el proxy (puerta, no producto) los ordena en milisegundos
