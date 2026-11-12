@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.0.0"
+__version__ = "2.1.0"
 
 __all__ = [
     "Checkpoint",
@@ -122,6 +122,8 @@ __all__ = [
     "BruteForce", "export_base_zip", "limits_ok",
     "fast_verify_invsqrt", "static_count", "propose_sa_windows",
     "run_circuit_auto",
+    "fast_verify_dqi", "fast_verify_dfthcsos",
+    "ensure_dfthcsos_reference_data",
 ]
 
 
@@ -140,12 +142,20 @@ def __getattr__(name: str):
     if name == "limits_ok":
         from .brute import limits_ok
         return limits_ok
-    if name in ("fast_verify_invsqrt", "static_count", "propose_sa_windows"):
-        from .circuit import (fast_verify_invsqrt, propose_sa_windows,
+    if name in ("fast_verify_invsqrt", "static_count", "propose_sa_windows",
+                "fast_verify_dqi", "fast_verify_dfthcsos",
+                "ensure_dfthcsos_reference_data"):
+        from .circuit import (ensure_dfthcsos_reference_data,
+                              fast_verify_dfthcsos, fast_verify_dqi,
+                              fast_verify_invsqrt, propose_sa_windows,
                               static_count)
         return {"fast_verify_invsqrt": fast_verify_invsqrt,
                 "static_count": static_count,
-                "propose_sa_windows": propose_sa_windows}[name]
+                "propose_sa_windows": propose_sa_windows,
+                "fast_verify_dqi": fast_verify_dqi,
+                "fast_verify_dfthcsos": fast_verify_dfthcsos,
+                "ensure_dfthcsos_reference_data":
+                    ensure_dfthcsos_reference_data}[name]
     if name == "run_circuit_auto":
         from .circuit_auto import run_circuit_auto
         return run_circuit_auto

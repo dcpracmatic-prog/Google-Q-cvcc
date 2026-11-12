@@ -1,4 +1,4 @@
-# PIPELINE.md — cómo se orquestan los flujos (v2.0.0)
+# PIPELINE.md — cómo se orquestan los flujos (v2.1.0)
 
 Guía para quien (o lo que) tenga que correr o modificar el repo sin
 leer todo el código. Todo lo que dice aquí se puede comprobar en
@@ -30,13 +30,18 @@ del entorno). El corredor v1.x (`python -m auto_mvp.auto --target
    del mejor circuito con menos Toffolis, solo si la permutación es
    idéntica sobre los 2^k estados. K rota (5, 6, 7) y la semilla
    cambia por propuesta. Cada propuesta tarda ~30 s o más.
-3. **Validación.** La verificación rápida (`auto_mvp/circuit.py`,
-   `fast_verify_invsqrt`) usa el verificador oficial vendido
-   (`auto_mvp/circuits/verifiers/verify_submission_invsqrt.py`)
-   con menos shots (max_x=1024, 1 shot por x, ~0.1 s): registro x
-   de 22 cúbits, scratch a |0>, x restaurado, error de fase dentro
-   de tolerancia. Si falla, el candidato es INVÁLIDO: no cuenta,
-   se registra el motivo y se sigue.
+3. **Validación.** La verificación rápida (`auto_mvp/circuit.py`)
+   usa el verificador oficial vendido de cada tarea, con menos
+   shots: invsqrt (`fast_verify_invsqrt`, max_x=1024, ~0.1 s);
+   DQI (`fast_verify_dqi`, 2,048 shots, ~37 s: registro S
+   restaurado, ancillas a |0>, fase correcta, eps+ < 1/16);
+   química (`fast_verify_dfthcsos`, 1 shot por dirección, ~28 s:
+   los ANGLE_k simulados + métricas de la factorización). Si
+   falla, el candidato es INVÁLIDO: no cuenta, se registra el
+   motivo y se sigue. DQI hashea desde el archivo .kmb (el
+   `to_file` del verificador falla en sandbox para circuitos
+   tamaño DQI); química enlaza el fcidump desde el dataset en
+   runtime.
 4. **Medición.** El S sale de simular el circuito (Toffolis medios
    por shot + síntesis de rotaciones), no de una fórmula sobre
    números. Si el S medido es menor que el mejor, el candidato

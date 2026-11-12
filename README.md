@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.0.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.1.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -8,7 +8,10 @@ simulando con el protocolo oficial, y repite si no pasan, hasta
 llegar a la meta o hasta que se cancele el script. Si no es un
 circuito válido, no cuenta, no es nada. Los números sueltos de la
 v1.x (GM 30.0056) no sirven: el corredor v1.x optimizaba métricas,
-no circuitos, y su éxito era tautológico.
+no circuitos, y su éxito era tautológico. La v2.1 mide las TRES
+tareas con el protocolo oficial (invsqrt, DQI y química); el
+corredor de punta a punta sigue siendo invsqrt (DQI y química
+pendientes de su operador de propuesta).
 
 > **Repo privado mientras la competencia esté abierta.**
 
