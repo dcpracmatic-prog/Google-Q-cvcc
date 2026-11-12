@@ -7,8 +7,10 @@ misma semántica; cuando el .so nativo se puede compilar (cc/c++ -O2 -shared
 mangling) y cargar por ctypes, se usa. Ante cualquier fallo, fallback
 silencioso y el motivo queda en available().
 
-Fuentes (materia prima, ~/workspace/user/files/): simd_engine_36_b682.c
-(spmm_hbag_simd), field_engine_native_v2_20_mg4n.cpp (dijkstra -> {cost, ok}),
+Fuentes vendidas en el repo (``auto_mvp/native/``, materia prima de
+Arturo, desde v1.5.0; antes se leían de ~/workspace/user/files/, fuera
+del repo): simd_engine_36_b682.c (spmm_hbag_simd),
+field_engine_native_v2_20_mg4n.cpp (dijkstra -> {cost, ok}),
 swar_fleet_22_qpwm.c (evaluate_agent_friction).
 """
 
@@ -27,7 +29,7 @@ __all__ = ["available", "spmm_csr_dense", "swar_friction", "dijkstra"]
 
 _MASK64 = (1 << 64) - 1
 _PATTERN = 0x5555555555555555
-_SRC_DIR = Path.home() / "workspace" / "user" / "files"
+_SRC_DIR = Path(__file__).resolve().parent / "native"
 _CACHE = Path.home() / ".cache" / "auto_mvp" / "accel"
 
 _SOURCES = {

@@ -50,10 +50,15 @@ Cómo funciona, en simple:
   (``component.json`` + ``manifest.json`` por tarea): la base para
   auditar y diseñar la solución real. Sin .kmb dentro. El manifest
   dice qué componente es medido y cuál es proyectado (fuerza bruta).
-  Si en runs hay .kmb/.kmx, se cargan con el compilador oficial de
-  Kickmix (``km.Circuit.from_file``) y el resultado va en
-  ``kmb_validation``: la base no lleva .kmb, pero lo que haya se
-  valida.
+  Además se entrega el Notebook de los ganadores
+  (``winners-gm-<gm>.ipynb``, los tres módulos listos para la
+  compilación pesada) y el balance global de la compensación: la
+  aceptación es la GM combinada, así que una tarea puede ir rezagada
+  si las otras dos compensan, y queda registrado quién va rezagado
+  y quién compensa. Si en runs hay .kmb/.kmx, se cargan con el
+  compilador oficial de Kickmix (``km.Circuit.from_file``) y el
+  resultado va en ``kmb_validation``: la base no lleva .kmb, pero
+  lo que haya se valida.
 
 Solo stdlib. No instala nada, no baja nada, no necesita Qualtran
 (el puente lo importa bajo demanda solo si se usa) ni el dataset
@@ -67,6 +72,7 @@ import argparse
 import json
 import math
 import sys
+import tempfile
 import time
 from pathlib import Path
 from typing import Any, Callable
@@ -75,9 +81,11 @@ from .brute import BruteForce
 from .combiner import (REFERENCE_S, TASKS, BestLedger, combine,
                        export_audit_zip, export_base_zip)
 from .mutator import Mutator
+from .notebook import export_winner_notebook
 from .pipeline import Pipeline
 from .proxy import MetadataProxy
 from .seeds import default_seeds
+from .serial import compensation_record
 from .vqcc.contracts import SPECS
 
 # El orden de las rondas: tarea 1, 2, 3, 1, 2, 3...
@@ -147,6 +155,27 @@ def _check_kmb_files(runs_dir: Path) -> dict[str, Any]:
     return out
 
 
+def _notebook_and_compensation(
+        runs_dir: Path, entries: dict[str, dict[str, Any]],
+        target: float, gm: float) -> tuple[str, dict[str, Any]]:
+    """El Notebook de los ganadores + el balance global de la entrega.
+
+    El Notebook se arma desde un ledger TEMPORAL con las entradas
+    entregadas (reales o de fuerza bruta): el ledger real NUNCA
+    recibe las de fuerza bruta, pero el Notebook debe mostrar la
+    combinación entregada, no solo lo real. La compensación dice qué
+    tarea va rezagada y cuál compensa (la aceptación es la GM global).
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        delivered = BestLedger(Path(tmp) / "delivered.json")
+        for task, entry in entries.items():
+            delivered.record(task, entry)
+        nb = export_winner_notebook(
+            delivered, runs_dir / "dataset",
+            runs_dir / f"winners-gm-{gm:.2f}.ipynb", target_gm=target)
+        return str(nb["path"]), compensation_record(delivered, target)
+
+
 def run_auto(target: float,
              runs_dir: str | Path = "runs",
              n_per_task: int = 10,
@@ -165,7 +194,7 @@ def run_auto(target: float,
     y ronda. ``max_rounds`` / ``time_budget_seconds``: los únicos
     límites de parada que pone quien ejecuta (si no, hasta llegar).
     Devuelve {target, gm, reached, projected, rounds, stopped,
-    per_round, zip, runs_dir, best_S, brute}.
+    per_round, zip, notebook, compensation, runs_dir, best_S, brute}.
     """
     target = _check_target(target)
     runs_dir = Path(runs_dir)
@@ -229,11 +258,15 @@ def run_auto(target: float,
         audit = export_audit_zip(
             ledger, runs_dir / f"audit-base-{gm:.2f}.zip",
             dataset_root=runs_dir / "dataset", target_gm=target)
+        notebook_path, compensation = _notebook_and_compensation(
+            runs_dir, {t: dict(e) for t, e in ledger.entries.items()},
+            target, gm)
         return {
             "target": target, "gm": gm, "reached": True,
             "projected": False, "rounds": 0,
             "stopped": "la base conocida ya llega a la meta",
             "per_round": per_round, "zip": str(audit["path"]),
+            "notebook": notebook_path, "compensation": compensation,
             "runs_dir": str(runs_dir),
             "best_S": ledger.combined_S(), "brute": {},
             "kmb_validation": _check_kmb_files(runs_dir),
@@ -275,6 +308,8 @@ def run_auto(target: float,
                     entries, runs_dir / f"audit-base-{gm:.2f}.zip",
                     target_gm=target, gm=gm,
                     required=ledger.gaps(target))
+                notebook_path, compensation = _notebook_and_compensation(
+                    runs_dir, entries, target, gm)
                 round_entry["tasks"][task] = {
                     "screened": res.screened, "promoted": res.promoted,
                     "proxy_rejected": res.proxy_rejected,
@@ -287,6 +322,8 @@ def run_auto(target: float,
                     "projected": projected, "rounds": rounds,
                     "stopped": "meta alcanzada",
                     "per_round": per_round, "zip": str(audit["path"]),
+                    "notebook": notebook_path,
+                    "compensation": compensation,
                     "runs_dir": str(runs_dir), "best_S": best,
                     "brute": {t: (None if b is None else {
                         "S": b["S"], "ops": b["ops"]})
@@ -321,12 +358,16 @@ def run_auto(target: float,
                     entries, runs_dir / f"audit-base-{gm:.2f}.zip",
                     target_gm=target, gm=gm,
                     required=ledger.gaps(target))
+                notebook_path, compensation = _notebook_and_compensation(
+                    runs_dir, entries, target, gm)
                 _progress(round_entry)
                 return {
                     "target": target, "gm": gm, "reached": True,
                     "projected": projected, "rounds": rounds,
                     "stopped": "meta alcanzada",
                     "per_round": per_round, "zip": str(audit["path"]),
+                    "notebook": notebook_path,
+                    "compensation": compensation,
                     "runs_dir": str(runs_dir), "best_S": best,
                     "brute": {t: (None if b is None else {
                         "S": b["S"], "ops": b["ops"]})
@@ -351,10 +392,17 @@ def run_auto(target: float,
             break
     ledger = _fresh_ledger(runs_dir)
     best = _best_S(ledger, brute_best)
+    _entries_final = _entries(ledger, brute_best, rounds)
+    with tempfile.TemporaryDirectory() as tmp:
+        _delivered = BestLedger(Path(tmp) / "delivered.json")
+        for _task, _entry in _entries_final.items():
+            _delivered.record(_task, _entry)
+        compensation = compensation_record(_delivered, target)
     return {
         "target": target, "gm": _gm_of_S(best), "reached": False,
         "projected": False, "rounds": rounds, "stopped": stopped,
-        "per_round": per_round, "zip": "",
+        "per_round": per_round, "zip": "", "notebook": "",
+        "compensation": compensation,
         "runs_dir": str(runs_dir), "best_S": best,
         "brute": {t: (None if b is None else {
             "S": b["S"], "ops": b["ops"]}) for t, b in brute_best.items()},

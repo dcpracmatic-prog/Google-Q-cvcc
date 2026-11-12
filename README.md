@@ -1,10 +1,10 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-Optimización de circuitos para la competencia Google Quantum AI —
-Verifiable Quantum Circuit Compilation (VQCC). El sistema busca
-combinaciones de las tres tareas (invsqrt, DQI, química) que sumen
-el puntaje pedido, y exporta la base para auditarla y diseñar el
-submission real.
+**Versión 1.5.0.** Optimización de circuitos para la competencia
+Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
+El sistema busca combinaciones de las tres tareas (invsqrt, DQI,
+química) que sumen el puntaje pedido, y exporta la base para
+auditarla y diseñar el submission real.
 
 > **Repo privado mientras la competencia esté abierta.**
 
@@ -108,7 +108,8 @@ Las seis familias de la materia prima, y dónde vive cada una:
 - **B, F & G — DSP, FIELD, SpMM, SIMD:** aceleradores
   bare-metal. Las operaciones matemáticas intensivas corren en
   C/C++ nativo cuando está disponible, con fallback en Python
-  puro. (`accel.py`)
+  puro. Las fuentes están vendidas en el repo
+  (`auto_mvp/native/`). (`accel.py`)
 
 ## Componentes
 
@@ -156,7 +157,10 @@ El comando único (instalar, decir cuánto quieres, ejecutar):
 ```bash
 # Busca la base para la meta que digas (1.5, 25, 10000...). Rondas
 # 1-2-3-1-2-3; al llegar entrega runs/audit-base-<gm>.zip con las
-# configuraciones y las métricas de cada tarea. Sin .kmb: esto NO es
+# configuraciones y las métricas de cada tarea, y
+# runs/winners-gm-<gm>.ipynb con los tres módulos ganadores, más el
+# balance global de la compensación (qué tarea va rezagada y cuál
+# compensa; la aceptación es la GM combinada). Sin .kmb: esto NO es
 # la solución de la competencia, es la base para crearla.
 # Fuerza bruta: si lo real no llega, las variables de costo se bajan
 # con operaciones aritméticas (restar, multiplicar, dividir...),

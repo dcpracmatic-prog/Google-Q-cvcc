@@ -25,6 +25,33 @@ from .proxy import MetadataProxy
 from .vqcc.contracts import SPECS
 
 
+def compensation_record(ledger: BestLedger,
+                        target_gm: float) -> dict[str, Any]:
+    """El balance global de la combinación: qué tarea va rezagada y
+    cuál compensa.
+
+    La aceptación es la GM combinada contra la meta (no por tarea):
+    una tarea puede seguir por encima de su S requerido individual
+    si las otras dos compensan. Se registra quién va rezagado y quién
+    compensa, para que el balance quede en el ranking y no sea una
+    decisión silenciosa.
+    """
+    combo = combine(ledger, target_gm)
+    record: dict[str, Any] = {
+        "accepted": bool(combo["reached"]),
+        "lagging_tasks": [], "compensating_tasks": []}
+    gaps = combo.get("required", {}) if isinstance(combo, dict) else {}
+    for t in TASKS:
+        cur = ledger.best().get(t, {}).get("S")
+        req = gaps.get(t, {}).get("required_S") if isinstance(gaps, dict) else None
+        if cur is None or req is None:
+            continue
+        (record["lagging_tasks"] if cur > req
+         else record["compensating_tasks"]).append(
+            {"task": t, "S": cur, "required_S": req})
+    return record
+
+
 def run_serial(jobs: list[dict[str, Any]], target_gm: float = 30.0,
                runs_dir: str | Path = "runs",
                margin: float = 0.10,
@@ -65,19 +92,7 @@ def run_serial(jobs: list[dict[str, Any]], target_gm: float = 30.0,
         if combo["reached"]:
             # Compensación global: la combinación llega aunque alguna
             # tarea siga por debajo de su S requerido individual.
-            gaps = combo.get("required", {}) if isinstance(combo, dict) else {}
-            for t in TASKS:
-                cur = ledger.best().get(t, {}).get("S")
-                req = gaps.get(t, {}).get("required_S") if isinstance(gaps, dict) else None
-                if cur is None or req is None:
-                    continue
-                if cur > req:
-                    compensation["lagging_tasks"].append(
-                        {"task": t, "S": cur, "required_S": req})
-                else:
-                    compensation["compensating_tasks"].append(
-                        {"task": t, "S": cur, "required_S": req})
-            compensation["accepted"] = True
+            compensation.update(compensation_record(ledger, target_gm))
             break
     combo = combine(ledger, target_gm)
     if combo["reached"]:

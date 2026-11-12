@@ -58,7 +58,7 @@ from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          evaluate_candidate, export_module, export_notebook,
                          mutate, promotion_gate, run_orchestrator,
                          run_serial, validate_submission)
-from .serial import run_serial as run_serial_tasks
+from .serial import compensation_record, run_serial as run_serial_tasks
 from .packaging import (EXPECTED_NPZ_KEYS, build_submission_zip,
                         submission_ready, validate_submission_dir,
                         validate_submission_zip)
@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "1.1.0"
+__version__ = "1.5.0"
 
 __all__ = [
     "Checkpoint",
@@ -108,7 +108,7 @@ __all__ = [
     "run_orchestrator", "run_serial", "validate_submission",
     "BestLedger", "combine", "export_audit_zip",
     "Mutation", "Mutator",
-    "run_serial_tasks",
+    "run_serial_tasks", "compensation_record",
     "export_winner_notebook",
     "accel_available", "accel_dijkstra", "accel_spmm_csr_dense",
     "accel_swar_friction",
