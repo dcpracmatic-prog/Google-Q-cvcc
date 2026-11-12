@@ -1,7 +1,21 @@
-# STATUS.md — estado del repo (v1.0.0, 2026-11-11)
+# STATUS.md — estado del repo (v1.1.0, 2026-11-11)
 
 ## Qué está integrado (verificado con números)
 
+- **v1.1.0 — metodología de métricas: circuitos y protocolo, en código
+  y en prosa.** Cada métrica de rendimiento del repo ahora se deriva
+  de forma transparente: `auto_mvp/vqcc/metrics.py` (`trace()`,
+  `trace_all()`, `report()`) trae, por tarea, el circuito con su
+  procedencia y su verificación, la fórmula oficial y la traza
+  completa (entradas, pasos intermedios, resultado). `METODOLOGIA.md`
+  es la versión en prosa: invsqrt S = Q×C con síntesis de rotaciones
+  (v0.9.1), DQI S = R×Q²×T con el mapa de fases medido (espejos
+  56.43%, companion 50,984 T, INFORME_MEJORA_30.md), química
+  S = λ_eff×T×Q con su contrato. Medido vs proyección queda marcado:
+  el BM+Forney Montgomery b=17 (S 3.2331e12) es proyección, no
+  medición. Verificado: la traza reproduce GM 23.94676 del mejor
+  envío; R recalculado desde eps+ da 1.19125 (reportado 1.19126).
+  Tests 7/7 nuevos; suite completa 117/117 (7 nuevos + 110 previos).
 - **v1.0.0 — la guía: el mejor por tarea, entre corridas.** El
   auto-optimizador es una GUÍA, no un compilador ni un validador.
   Un ledger persistente (`runs/best_per_task.json`) guarda el mejor
