@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.6.0 — tunelamiento morfológico (MORPH) sobre Qualtran.
+"""AUTO_MVP — tunelamiento morfológico (MORPH) sobre Qualtran (desde v0.6.0).
 
 El motor morfogenético de la especificación AUTO_MVP v0.0.1 (fase 3)
 tenía un problema real: no tenía fórmula ni algoritmo definidos. La

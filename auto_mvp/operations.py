@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.7.0 — operaciones compartidas de la Skill / Tool.
+"""AUTO_MVP — operaciones compartidas de la Skill / Tool (desde v0.7.0).
 
 Un solo punto de entrada para las operaciones REALES del repo, usado
 por igual por:
@@ -292,6 +292,85 @@ def combine_best(target_gm: float = 30.0,
             tmp.cleanup()
 
 
+def mutate(seed_graph: dict[str, Any], task: str,
+           base_metrics: dict[str, Any], n: int = 10, seed: int = 42,
+           rules: list[str] | None = None) -> dict[str, Any]:
+    """El mutador autónomo: genera candidatos mutando la semilla.
+
+    Entrada: el grafo de llamadas base (dict), la tarea, las métricas
+    de la semilla (Q, T, eps_plus...) y cuántos candidatos generar.
+    Salida: los candidatos en el formato del pipeline (meta como
+    dict, para que sea JSON), cada uno con su estrategia, su regla y
+    su delta_T medido. El mutador nunca inventa un costo: el
+    eps_plus (o rel_error / lambda_eff) se hereda de la semilla.
+    """
+    from .morph_tunnel import RULES as ALL_RULES
+    from .mutator import Mutator
+    use_rules = None
+    if rules is not None:
+        by_name = {r.name: r for r in ALL_RULES}
+        use_rules = [by_name[r] for r in rules if r in by_name]
+        if len(use_rules) != len(rules):
+            raise ValueError(f"reglas desconocidas: {set(rules) - set(by_name)}")
+    mut = Mutator(seed_graph, task, base_metrics, rules=use_rules, seed=seed)
+    out = []
+    for c in mut.propose(n):
+        d = dict(c)
+        meta = d["meta"]
+        d["meta"] = {"task": meta.task, "metrics": dict(meta.metrics)}
+        out.append(d)
+    return {"task": task, "n": len(out), "candidates": out,
+            "history": mut.history}
+
+
+def run_serial(jobs: list[dict[str, Any]], target_gm: float = 30.0,
+               runs_dir: str | Path | None = None,
+               export_notebook: bool = False) -> dict[str, Any]:
+    """La orquestación en serie con compensación global.
+
+    Entrada: los trabajos por tarea (cada uno con task, seed_graph,
+    base_metrics y opcionalmente rules, mutator_kwargs y n), el
+    objetivo y el directorio de runs. Corre cada tarea en serie con
+    el mismo ledger (mutador + pipeline) y acepta el balance global
+    cuando la GM combinada llega al objetivo, aunque una tarea se
+    rezague. Devuelve la GM, si llegó, por tarea y la compensación.
+    """
+    from .serial import run_serial as _run_serial
+    tmp = tempfile.TemporaryDirectory() if runs_dir is None else None
+    try:
+        root = Path(runs_dir) if runs_dir is not None else Path(tmp.name)
+        return _run_serial(jobs, target_gm=target_gm, runs_dir=root,
+                           export_notebook=export_notebook)
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
+def export_notebook(runs_dir: str | Path | None = None,
+                    out_path: str | Path | None = None,
+                    target_gm: float | None = None) -> dict[str, Any]:
+    """Exporta los tres módulos ganadores a un Notebook .ipynb ejecutable.
+
+    Entrada: el directorio de runs (su best_per_task.json y su
+    dataset/) y la ruta de salida. Salida: la ruta del .ipynb, los
+    archivos que lleva, la GM y si llegó al objetivo. El notebook es
+    autocontenido: cada tarea trae su module.py incrustado y la
+    celda final recomputa la GM con las fórmulas oficiales.
+    """
+    from .combiner import BestLedger
+    from .notebook import export_winner_notebook
+    tmp = tempfile.TemporaryDirectory() if runs_dir is None else None
+    try:
+        root = Path(runs_dir) if runs_dir is not None else Path(tmp.name)
+        ledger = BestLedger(root / "best_per_task.json")
+        out = root / f"winners.ipynb" if out_path is None else Path(out_path)
+        return export_winner_notebook(
+            ledger, root / "dataset", out, target_gm=target_gm)
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
 OPERATIONS = {
     "evaluate_candidate": evaluate_candidate,
     "apply_morph_tunnel": apply_morph_tunnel,
@@ -302,4 +381,7 @@ OPERATIONS = {
     "validate_submission": validate_submission,
     "combine_best": combine_best,
     "promotion_gate": promotion_gate,
+    "mutate": mutate,
+    "run_serial": run_serial,
+    "export_notebook": export_notebook,
 }

@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — evaluación proxy en el espacio de metadatos.
+"""AUTO_MVP — evaluación proxy en el espacio de metadatos (desde v0.3.0).
 
 La propuesta de Arturo (2026-11-11): en lugar de compilar, sintetizar
 o simular cada variante completa, evaluar una función de costo

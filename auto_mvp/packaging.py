@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.9.0 — formato del submission.zip y su validador.
+"""AUTO_MVP — formato del submission.zip y su validador (desde v0.9.0).
 
 El formato oficial (guía VQCC 2026-11-06 + verificadores en disco;
 la v0.3.0 falló justo por duplicados en otras rutas, así que el

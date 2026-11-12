@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — orquestador del ciclo de 5 fases (MVP).
+"""AUTO_MVP — orquestador del ciclo de 5 fases (MVP) (desde v0.3.0).
 
 El ciclo de la especificación v0.0.1, implementado sobre los
 componentes v0.2.1 (que quedan intactos) con tres compuertas nuevas:

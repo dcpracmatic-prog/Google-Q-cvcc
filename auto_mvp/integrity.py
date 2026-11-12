@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — filtro de integridad (fase 2 de la especificación).
+"""AUTO_MVP — filtro de integridad (fase 2 de la especificación) (desde v0.3.0).
 
 La lección del paso 51: una reducción de Q puramente numérica (Q=1,990)
 corrompió la equivalencia lógica del sigma y la criba por costo no lo

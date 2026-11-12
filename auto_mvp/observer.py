@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.4.0 — Observer (port de PRIMITIVE OBSERVER v0.7).
+"""AUTO_MVP — Observer (port de PRIMITIVE OBSERVER v0.7) (desde v0.4.0).
 
 El Observer de Arturo (``primitive.v7``, 2026-11-11) tiene dos ideas
 que aquí se respetan al pie de la letra:

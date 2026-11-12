@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.2 — pipeline asíncrono por fases (6 h / 24 h).
+"""AUTO_MVP — pipeline asíncrono por fases (6 h / 24 h) (desde v0.3.2).
 
 El diseño de Arturo: un pipeline por fases que es la única estrategia
 viable para pelear el primer lugar. Tres fases, una puerta y un

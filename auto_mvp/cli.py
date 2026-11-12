@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.7.0 — CLI: el punto de entrada por terminal de la Skill.
+"""AUTO_MVP — CLI: el punto de entrada por terminal de la Skill (desde v0.7.0).
 
 Uso (después de instalar el paquete, o desde el repo):
     python -m auto_mvp.cli <operación> [opciones]
@@ -14,6 +14,9 @@ funciones para ChatGPT/Grok; ver auto_mvp/operations.py):
     validate   valida el formato de un submission.zip (o su directorio)
     combine    la guía: el mejor por tarea, entre corridas, contra el objetivo
     gate       la puerta de promoción (GM, DQI necesario, S objetivo)
+    mutate     el mutador autónomo: genera candidatos mutando la semilla
+    serial     la orquestación en serie con compensación global
+    notebook   exporta los tres módulos ganadores a un .ipynb ejecutable
     version    la versión del paquete
 
 Entrada y salida son JSON (por archivo con --in/--out, o por stdin/
@@ -28,8 +31,9 @@ import sys
 from . import __version__
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
                          combine_best, decode_json_config,
-                         evaluate_candidate, export_module, promotion_gate,
-                         run_orchestrator, validate_submission)
+                         evaluate_candidate, export_module, export_notebook,
+                         mutate, promotion_gate, run_orchestrator,
+                         run_serial, validate_submission)
 
 
 def _load(path: str | None) -> dict:
@@ -100,6 +104,28 @@ def main(argv: list[str] | None = None) -> int:
     g.add_argument("--S", dest="S", default=None,
                    help="JSON con los S por tarea, ej. '{\"dqi\": 3.7e11}'")
 
+    m = add("mutate", "el mutador autónomo: genera candidatos mutando la semilla")
+    m.add_argument("--n", type=int, default=10,
+                   help="cuántos candidatos generar (por defecto 10)")
+    m.add_argument("--seed", type=int, default=42,
+                   help="semilla del generador (determinista)")
+
+    s = add("serial", "la orquestación en serie con compensación global")
+    s.add_argument("--target", type=float, default=30.0,
+                   help="puntaje objetivo (meta_mvp, por defecto 30.00)")
+    s.add_argument("--runs-dir", default=None,
+                   help="directorio de runs (su best_per_task.json)")
+    s.add_argument("--notebook", action="store_true",
+                   help="si el objetivo se alcanza, exporta también el .ipynb")
+
+    nb = add("notebook", "exporta los tres módulos ganadores a un .ipynb")
+    nb.add_argument("--runs-dir", default=None,
+                    help="directorio de runs (su best_per_task.json y dataset/)")
+    nb.add_argument("--out", default=None,
+                    help="ruta del .ipynb (si no, winners.ipynb en runs/)")
+    nb.add_argument("--target", type=float, default=None,
+                    help="puntaje objetivo (meta_mvp)")
+
     sub.add_parser("version", help="la versión del paquete")
 
     args = p.parse_args(argv)
@@ -140,6 +166,20 @@ def main(argv: list[str] | None = None) -> int:
         elif args.op == "gate":
             s = json.loads(args.S) if args.S else None
             out = promotion_gate(args.meta_mvp, S=s)
+        elif args.op == "mutate":
+            data = _load(args.inp)
+            out = mutate(data["seed_graph"], data["task"],
+                         data["base_metrics"], n=args.n, seed=args.seed,
+                         rules=data.get("rules"))
+        elif args.op == "serial":
+            data = _load(args.inp)
+            jobs = data.get("jobs", data)
+            out = run_serial(jobs, target_gm=data.get("target_gm", args.target),
+                             runs_dir=args.runs_dir,
+                             export_notebook=args.notebook)
+        elif args.op == "notebook":
+            out = export_notebook(runs_dir=args.runs_dir, out_path=args.out,
+                                  target_gm=args.target)
         else:  # pragma: no cover
             p.error(f"operación desconocida: {args.op}")
     except (ValueError, KeyError, TypeError) as exc:

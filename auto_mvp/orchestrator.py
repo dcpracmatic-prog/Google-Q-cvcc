@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.6.0 — orquestador adaptativo (la capa de adaptación dinámica).
+"""AUTO_MVP — orquestador adaptativo (la capa de adaptación dinámica) (desde v0.6.0).
 
 El orquestador no se limita a pruebas fijas y paramétricas: lee
 configuraciones JSON (con directivas en lenguaje natural), reordena

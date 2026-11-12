@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — bitácora con cadena de hashes, vector CVV (fase 4).
+"""AUTO_MVP — bitácora con cadena de hashes, vector CVV (fase 4) (desde v0.3.0).
 
 Cada hito de mejora se sella con un CVV: el hash del estado anterior,
 el checksum del registro actual y quién lo verificó. La cadena es

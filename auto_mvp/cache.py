@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.1 — caché de verificación por hash de parámetros.
+"""AUTO_MVP — caché de verificación por hash de parámetros (desde v0.3.1).
 
 Idea de los archivos DSP de Arturo (calibrar_dsp: caché por sonda):
 verificar dos veces el mismo candidato es tirar cómputo. La caché

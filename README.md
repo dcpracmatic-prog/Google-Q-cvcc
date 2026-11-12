@@ -16,15 +16,21 @@ submission real.
   autonomía (AUTO → PROPOSE → SHADOW) cuando la compilación falla
   3 veces seguidas. El mejor verificado vive separado del mejor
   proyectado.
-- **Optimización:** criba variantes por metadatos (proxy), tunela
-  bloques con reglas MORPH medidas (Qualtran: grafo de llamadas,
-  T/Q de primera clase), lee directivas JSON, y promueve lo que
-  bate el mejor envío.
+- **Optimización:** el mutador autónomo genera las variantes
+  (morph, ventana SA, salto Lévy, MWIS) y las criba por metadatos
+  (proxy), tunela bloques con reglas MORPH medidas (Qualtran:
+  grafo de llamadas, T/Q de primera clase), lee directivas JSON,
+  y promueve lo que bate el mejor envío.
 - **La guía:** guarda el mejor componente por tarea ENTRE corridas
   (la corrida 1 puede traer el mejor invsqrt y la corrida 2 el
   mejor DQI) y, dado un objetivo, dice si la combinación llega y
   cuánto le falta a cada tarea. Cuando llega, exporta los tres
-  componentes en un ZIP de auditoría.
+  componentes en un ZIP de auditoría y en un Notebook .ipynb
+  ejecutable, listos para la compilación pesada.
+- **Orquestación en serie:** corre las tres tareas en serie con el
+  mismo ledger y acepta el balance global cuando la GM combinada
+  llega al objetivo, aunque una tarea se rezague y las otras dos
+  compensen.
 - **El formato del submission:** arma el ZIP con la estructura
   oficial y lo valida; si no pasa, lo borra.
 
@@ -62,6 +68,48 @@ checkpoint guarda cada mejor verificado al instante.
   (Q=1,414, T=1,315,731); química baseline λ_eff 49.254686,
   error_2 16.1332 mHa.
 
+## Gobernanza (directiva de Arturo, 2026-11-11 — máxima autoridad)
+
+**La misión de este chat es crear LA HERRAMIENTA, no la
+competencia ni su solución.** La arquitectura del repo debe
+exportar, generar, modificar y optimizar todo lo referente a la
+competencia. El flujo es el del **Solucionador Morfológico**:
+
+```
+config JSON (decodificador)
+  → ciclo morfológico por tarea, en serie (Qualtran + MORPH + estrategias)
+  → filtro y validación (meta_mvp + integridad formal)
+  → ranking dinámico + dataset (structure.json, module.py)
+  → al cruzar la meta global: Notebook .ipynb ejecutable con los tres
+    módulos ganadores, listos para la compilación pesada
+```
+
+Las seis familias de la materia prima, y dónde vive cada una:
+
+- **K — MORPH, Qualtran, registro cuántico:** el núcleo
+  morfológico y la materia prima. Qualtran da los Bloqs y las
+  métricas T/Q; MORPH reordena y muta la topología.
+  (`qualtran_bridge.py`, `morph_tunnel.py`)
+- **D — Operadores de mutación y búsqueda:** ventanas SA de
+  Toffoli, tunelamiento Lévy, MWIS (LOGIC_CORE) y registro
+  dinámico de transformaciones. Son las estrategias de mutación
+  del orquestador. (`mutator.py`, `mwis.py`, `maxcut.py`)
+- **E & J — Lab y Tres Pilares / DQI:** el evaluador. Calcula
+  el S y la GM oficiales con las fórmulas de la competencia.
+  (`numeric_lab.py`, `proxy.py`, `vqcc/`)
+- **A & H — Auto-reparación y verificación formal:** los
+  guardianes del fail-closed. Ningún módulo promovido pasa sin
+  que el lazo compruebe que el contrato lógico sigue intacto.
+  (`healing/`, `integrity.py`, `vqcc/verify.py`)
+- **C & I — Observer / Centinela y EQG:** telemetría y
+  causalidad. Registran la fricción y la salud de la búsqueda
+  para ajustar la agresividad del orquestador.
+  (`observer.py`, `cvv.py`, `checkpoint.py`)
+- **B, F & G — DSP, FIELD, SpMM, SIMD:** aceleradores
+  bare-metal. Las operaciones matemáticas intensivas corren en
+  C/C++ nativo cuando está disponible, con fallback en Python
+  puro. (`accel.py`)
+
 ## Componentes
 
 ```
@@ -87,7 +135,11 @@ auto_mvp/
   dataset.py          dataset de trabajo (estructura + código)
   packaging.py        formato del submission.zip y su validador
   combiner.py         la guía (mejor por tarea, entre corridas)
-  operations.py       punto de entrada único (9 operaciones)
+  mutator.py          mutador autónomo (morph, ventana SA, salto Lévy, MWIS)
+  serial.py           orquestación en serie con compensación global
+  notebook.py         exporta los ganadores a un .ipynb ejecutable
+  accel.py            aceleración nativa opcional (SpMM, FIELD, SWAR)
+  operations.py       punto de entrada único (12 operaciones)
   cli.py              CLI: python -m auto_mvp.cli <op>
 skills/auto-mvp-vqcc/
   mcp_server.py     servidor MCP (stdio, solo stdlib) para Claude
@@ -114,13 +166,22 @@ python -m auto_mvp.cli validate --path submission.zip
 
 # La puerta de promoción
 python -m auto_mvp.cli gate --meta-mvp 30
+
+# El mutador autónomo (genera candidatos desde una semilla)
+python -m auto_mvp.cli mutate --in semilla.json --n 10 --seed 42
+
+# La orquestación en serie (las tres tareas, compensación global)
+python -m auto_mvp.cli serial --in trabajos.json --target 30 --runs-dir runs
+
+# Los ganadores a un Notebook ejecutable
+python -m auto_mvp.cli notebook --runs-dir runs --out ganadores.ipynb
 ```
 
-Las 9 operaciones (`evaluate_candidate`, `apply_morph_tunnel`,
+Las 12 operaciones (`evaluate_candidate`, `apply_morph_tunnel`,
 `decode_json_config`, `run_orchestrator`, `check_integrity`,
 `export_module`, `validate_submission`, `combine_best`,
-`promotion_gate`) están en `auto_mvp/operations.py` y se invocan
-igual por CLI, MCP y `tools.py`.
+`promotion_gate`, `mutate`, `run_serial`, `export_notebook`) están en
+`auto_mvp/operations.py` y se invocan igual por CLI, MCP y `tools.py`.
 
 ## Correr los tests
 

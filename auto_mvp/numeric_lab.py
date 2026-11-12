@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.5.0 — laboratorio numérico y puerta fail-closed (Lab package).
+"""AUTO_MVP — laboratorio numérico y puerta fail-closed (Lab package) (desde v0.5.0).
 
 Incorporación fiel del ``Quantum_Compilation_Lab_Package`` de Arturo
 (``competition_suite.py``), adaptada a este repo: solo stdlib, sin

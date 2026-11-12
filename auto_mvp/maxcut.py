@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.4.0 — MaxCut (port fiel del programa C++ de Arturo).
+"""AUTO_MVP — MaxCut (port fiel del programa C++ de Arturo) (desde v0.4.0).
 
 El programa original (``examples/maxcut_reference.cpp``, pegado por
 Arturo el 2026-11-11, guardado verbatim) resuelve MaxCut con dos

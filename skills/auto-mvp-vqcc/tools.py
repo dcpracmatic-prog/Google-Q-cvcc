@@ -1,6 +1,6 @@
-"""AUTO_MVP v0.7.0 — funciones para ChatGPT (Code Interpreter) y Grok.
+"""AUTO_MVP — funciones para ChatGPT (Code Interpreter) y Grok (desde v0.7.0).
 
-Las 6 operaciones reales del repo como funciones Python planas, para
+Las 12 operaciones reales del repo como funciones Python planas, para
 cargarlas en una sesión de Code Interpreter (ChatGPT) o Grok: sube
 este archivo junto con el repo (o instala el paquete) y haz
 ``from tools import evaluate_candidate, ...``. El esquema de
@@ -30,8 +30,11 @@ from auto_mvp.operations import (apply_morph_tunnel as _apply_morph_tunnel,
                                  decode_json_config as _decode_json_config,
                                  evaluate_candidate as _evaluate_candidate,
                                  export_module as _export_module,
+                                 export_notebook as _export_notebook,
+                                 mutate as _mutate,
                                  promotion_gate as _promotion_gate,
                                  run_orchestrator as _run_orchestrator,
+                                 run_serial as _run_serial,
                                  validate_submission as _validate_submission)
 
 __all__ = [
@@ -44,6 +47,9 @@ __all__ = [
     "validate_submission",
     "combine_best",
     "promotion_gate",
+    "mutate",
+    "run_serial",
+    "export_notebook",
 ]
 
 
@@ -103,3 +109,26 @@ def promotion_gate(meta_mvp: float = 30.0,
                    S: dict[str, float] | None = None) -> dict[str, Any]:
     """La puerta de promoción: lo que exige meta_mvp (y la GM con S)."""
     return _promotion_gate(meta_mvp, S=S)
+
+
+def mutate(seed_graph: dict[str, Any], task: str,
+           base_metrics: dict[str, Any], n: int = 10, seed: int = 42,
+           rules: list[str] | None = None) -> dict[str, Any]:
+    """El mutador autónomo: genera candidatos mutando la semilla."""
+    return _mutate(seed_graph, task, base_metrics, n=n, seed=seed, rules=rules)
+
+
+def run_serial(jobs: list[dict[str, Any]], target_gm: float = 30.0,
+               runs_dir: str | None = None,
+               export_notebook: bool = False) -> dict[str, Any]:
+    """La orquestación en serie con compensación global."""
+    return _run_serial(jobs, target_gm=target_gm, runs_dir=runs_dir,
+                       export_notebook=export_notebook)
+
+
+def export_notebook(runs_dir: str | None = None,
+                    out_path: str | None = None,
+                    target_gm: float | None = None) -> dict[str, Any]:
+    """Exporta los tres módulos ganadores a un .ipynb ejecutable."""
+    return _export_notebook(runs_dir=runs_dir, out_path=out_path,
+                            target_gm=target_gm)

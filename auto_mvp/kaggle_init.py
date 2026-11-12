@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.2 — inicialización del notebook (Kaggle / local).
+"""AUTO_MVP — inicialización del notebook (Kaggle / local) (desde v0.3.2).
 
 La separación que pide Arturo, hecha código:
 

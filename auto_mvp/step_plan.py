@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.6.0 — plan de pasos y reprogramación fluida.
+"""AUTO_MVP — plan de pasos y reprogramación fluida (desde v0.6.0).
 
 La reprogramación fluida de órdenes o pasos entre celdas: el plan
 es la lista ordenada de pasos (celdas) del orquestador, y el

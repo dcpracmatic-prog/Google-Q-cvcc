@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.6.0 — decodificador de JSON en lenguaje natural.
+"""AUTO_MVP — decodificador de JSON en lenguaje natural (desde v0.6.0).
 
 La capa de adaptación dinámica por JSON: lee configuraciones JSON
 (con directivas en lenguaje natural) y las traduce a pasos del

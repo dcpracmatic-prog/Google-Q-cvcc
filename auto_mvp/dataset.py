@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.8.0 — dataset de trabajo: exportar e inyectar módulos.
+"""AUTO_MVP — dataset de trabajo: exportar e inyectar módulos (desde v0.8.0).
 
 El diseño fail-closed está perfecto para el submission.zip FINAL
 (solo los tres verificadores en modo full lo arman, para no subir
@@ -66,7 +66,7 @@ def _structure(record: dict[str, Any]) -> dict[str, Any]:
 
 
 MODULE_TEMPLATE = '''"""Módulo exportado: __NAME__ (__KIND__, __TASK__).
-Generado por AUTO_MVP v0.8.0 desde el dataset de trabajo.
+Generado por AUTO_MVP __VERSION__ desde el dataset de trabajo.
 Ejecutable (solo stdlib):  python module.py
 Verifica la estructura completa y recomputa S y GM con las fórmulas
 oficiales de la competencia. No es un resumen: es el módulo.
@@ -164,10 +164,12 @@ if __name__ == "__main__":
 
 def render_module(name: str, kind: str, task: str) -> str:
     """El código ejecutable del módulo (solo stdlib)."""
+    from . import __version__
     return (MODULE_TEMPLATE
             .replace("__NAME__", name)
             .replace("__KIND__", kind)
-            .replace("__TASK__", task))
+            .replace("__TASK__", task)
+            .replace("__VERSION__", __version__))
 
 
 def _write_json(path: Path, obj: Any) -> None:

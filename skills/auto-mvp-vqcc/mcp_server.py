@@ -1,6 +1,6 @@
-"""AUTO_MVP v0.7.0 — servidor MCP (stdio, solo stdlib) para Claude.
+"""AUTO_MVP — servidor MCP (stdio, solo stdlib) para Claude (desde v0.7.0).
 
-Expone las 6 operaciones reales del repo (auto_mvp/operations.py)
+Expone las 12 operaciones reales del repo (auto_mvp/operations.py)
 como herramientas MCP. Transporte: JSON-RPC 2.0 por stdio (una
 línea JSON por mensaje), el transporte estándar de MCP. No usa el
 SDK de MCP (el paquete es solo stdlib): implementa el mínimo del
@@ -184,6 +184,66 @@ TOOLS = [
                 "meta_mvp": {"type": "number", "default": 30.0},
                 "S": {"type": "object",
                       "description": "S por tarea, ej. {\"dqi\": 3.7e11}"},
+            },
+        },
+    },
+    {
+        "name": "mutate",
+        "description": ("El mutador autónomo: genera candidatos mutando "
+                        "la semilla con las cuatro estrategias (morph, "
+                        "ventana SA, salto Lévy, MWIS). Cada candidato "
+                        "lleva su delta_T medido; el eps_plus se hereda."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "seed_graph": {"type": "object",
+                               "description": "el grafo de llamadas base (dict)"},
+                "task": {"type": "string",
+                         "description": "invsqrt | dqi | dfthcsos"},
+                "base_metrics": {"type": "object",
+                                 "description": "métricas de la semilla (Q, T, eps_plus...)"},
+                "n": {"type": "integer", "default": 10},
+                "seed": {"type": "integer", "default": 42},
+                "rules": {"type": "array", "items": {"type": "string"},
+                          "description": "nombres de reglas MORPH (si no, todas)"},
+            },
+            "required": ["seed_graph", "task", "base_metrics"],
+        },
+    },
+    {
+        "name": "run_serial",
+        "description": ("La orquestación en serie con compensación global: "
+                        "corre las tareas en serie con el mismo ledger "
+                        "(mutador + pipeline) y acepta el balance global "
+                        "cuando la GM combinada llega al objetivo."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "jobs": {"type": "array",
+                         "description": "trabajos por tarea (task, seed_graph, base_metrics, n)"},
+                "target_gm": {"type": "number", "default": 30.0},
+                "runs_dir": {"type": "string",
+                             "description": "directorio de runs"},
+                "export_notebook": {"type": "boolean",
+                                    "description": "exporta también el .ipynb si llega"},
+            },
+            "required": ["jobs"],
+        },
+    },
+    {
+        "name": "export_notebook",
+        "description": ("Exporta los tres módulos ganadores a un Notebook "
+                        ".ipynb ejecutable: cada tarea trae su module.py "
+                        "incrustado y la celda final recomputa la GM."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "runs_dir": {"type": "string",
+                             "description": "directorio de runs (best_per_task.json y dataset/)"},
+                "out_path": {"type": "string",
+                             "description": "ruta del .ipynb (si no, winners.ipynb)"},
+                "target_gm": {"type": "number",
+                              "description": "puntaje objetivo (meta_mvp)"},
             },
         },
     },

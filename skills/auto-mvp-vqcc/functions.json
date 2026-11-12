@@ -1,1 +1,324 @@
-[{"function": {"description": "Evalúa un candidato VQCC (proxy + puerta de promoción): S estimado, GM, ratios, si promueve y los motivos. El proxy compara contra el mejor S conocido (por defecto, el del mejor envío).", "name": "evaluate_candidate", "parameters": {"properties": {"best_S": {"description": "Mejor S conocido de la tarea (por defecto, el del mejor envío).", "type": "number"}, "candidate": {"description": "Candidato: name, kind (candidate|target), meta {task: invsqrt|dqi|dfthcsos, metrics: {Q, T, eps_plus, ...}}, metrics.", "type": "object"}, "margin": {"description": "Margen del proxy (por defecto 0.10).", "type": "number"}, "meta_mvp": {"description": "La meta absoluta exigida (por defecto 30.0).", "type": "number"}}, "required": ["candidate"], "type": "object"}}, "type": "function"}, {"function": {"description": "Tunela un grafo de llamadas con las reglas MORPH (reemplaza/reordena bloques): T/Q antes y después, movimientos con su evidencia medida. Una regla sin evidencia no se aplica.", "name": "apply_morph_tunnel", "parameters": {"properties": {"call_graph": {"description": "Grafo de llamadas (dict de CallGraph: source, root {name, kind, t_count, qubits, children}).", "type": "object"}, "method": {"description": "Método de búsqueda (por defecto greedy).", "enum": ["greedy", "beam"], "type": "string"}, "rules": {"description": "Reglas (si no se pasan, las del registro, con evidencia medida).", "type": "array"}}, "required": ["call_graph"], "type": "object"}}, "type": "function"}, {"function": {"description": "Decodifica una configuración JSON con directivas en lenguaje natural (vocabulario controlado): meta_mvp, pasos, directivas decodificadas y las no parseadas (con su motivo). Nada se descarta en silencio.", "name": "decode_json_config", "parameters": {"properties": {"config": {"description": "Config: meta_mvp, steps [{step, method, params}], directives [\"sube la meta a 30\", ...], budget.", "type": "object"}}, "required": ["config"], "type": "object"}}, "type": "function"}, {"function": {"description": "Corre el orquestador adaptativo sobre un flujo de candidatos con una config JSON: cribados, promovidos, tunelados, mejor GM, si la meta se alcanzó y los artefactos. La meta solo la alcanza un candidato REAL (un target es una hipótesis).", "name": "run_orchestrator", "parameters": {"properties": {"best_S": {"description": "Mejor S por tarea, ej. {\"dqi\": 3.714e12}.", "type": "object"}, "candidates": {"description": "Lista de candidatos (cada uno con name, kind, meta, metrics y, si aplica, call_graph).", "type": "array"}, "config": {"description": "Config: meta_mvp, directives, budget.", "type": "object"}}, "required": ["candidates"], "type": "object"}}, "type": "function"}, {"function": {"description": "Pasa el filtro de integridad obligatorio sobre una evidencia de circuito (sigma, C/B restaurados, dreg/alpha en cero, temporales, shots). Un 'projection' (solo números, sin circuito) NUNCA pasa este filtro.", "name": "check_integrity", "parameters": {"properties": {"evidence": {"description": "Evidencia: kind (circuit|projection), sigma, sigma_ref_hash, c_restored, b_restored, total_coef, dreg_zero, alpha_zero, temporaries_zero, temporaries_total, allowed_dirty, shots, verified_by.", "type": "object"}}, "required": ["evidence"], "type": "object"}}, "type": "function"}, {"function": {"description": "Exporta e inyecta un módulo promovido al dataset de trabajo: su estructura completa (grafo de llamadas) y su código ejecutable (module.py), para evaluarlo y compilarlo. No es el submission.zip (ese sigue fail-closed).", "name": "export_module", "parameters": {"properties": {"record": {"description": "Record promovido: iteration, gm, S, ratios, task, kind, meta, metrics, call_graph, source, integrity.", "type": "object"}, "runs_dir": {"description": "Directorio de runs (si no, temporal).", "type": "string"}}, "required": ["record"], "type": "object"}}, "type": "function"}, {"function": {"description": "Valida el formato de un submission.zip (o su directorio): rutas exactas, sin duplicados ni directorio raíz extra, angle_k consecutivos sin huecos, submission.npz con las 6 claves (U, W, H2_I, H1_I, Hsym_lower, tree_edges). Fail-closed: cualquier fallo bloquea el envío.", "name": "validate_submission", "parameters": {"properties": {"path": {"description": "Ruta del ZIP o del directorio a validar.", "type": "string"}, "task_statuses": {"description": "Estados de los tres verificadores (invsqrt/dqi/dfthcsos), si se quiere la puerta fail-closed completa.", "type": "object"}, "mode": {"description": "Modo de la puerta: 'full' (por defecto) o 'smoke'.", "type": "string"}}, "required": ["path"], "type": "object"}}, "type": "function"}, {"function": {"description": "La guía: junta el mejor componente por tarea (entre corridas) y dice si la combinación llega al puntaje objetivo, cuánto le falta a cada tarea y, si llega, exporta los tres en un ZIP de auditoría para auditarlos.", "name": "combine_best", "parameters": {"properties": {"target_gm": {"description": "Puntaje objetivo (meta_mvp, por defecto 30.00).", "type": "number"}, "runs_dir": {"description": "Directorio de runs (su best_per_task.json).", "type": "string"}, "export": {"description": "Si el objetivo se alcanza, escribe el ZIP de auditoría.", "type": "boolean"}}, "required": [], "type": "object"}}, "type": "function"}, {"function": {"description": "La puerta de promoción: lo que exige meta_mvp (ratio DQI necesario, S objetivo) y, si se pasa S, la GM y si promueve.", "name": "promotion_gate", "parameters": {"properties": {"S": {"description": "S por tarea, ej. {\"dqi\": 3.7e11}.", "type": "object"}, "meta_mvp": {"description": "La meta absoluta exigida (por defecto 30.0).", "type": "number"}}, "type": "object"}}, "type": "function"}]
+[
+  {
+    "function": {
+      "description": "Evalúa un candidato VQCC (proxy + puerta de promoción): S estimado, GM, ratios, si promueve y los motivos. El proxy compara contra el mejor S conocido (por defecto, el del mejor envío).",
+      "name": "evaluate_candidate",
+      "parameters": {
+        "properties": {
+          "best_S": {
+            "description": "Mejor S conocido de la tarea (por defecto, el del mejor envío).",
+            "type": "number"
+          },
+          "candidate": {
+            "description": "Candidato: name, kind (candidate|target), meta {task: invsqrt|dqi|dfthcsos, metrics: {Q, T, eps_plus, ...}}, metrics.",
+            "type": "object"
+          },
+          "margin": {
+            "description": "Margen del proxy (por defecto 0.10).",
+            "type": "number"
+          },
+          "meta_mvp": {
+            "description": "La meta absoluta exigida (por defecto 30.0).",
+            "type": "number"
+          }
+        },
+        "required": [
+          "candidate"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Tunela un grafo de llamadas con las reglas MORPH (reemplaza/reordena bloques): T/Q antes y después, movimientos con su evidencia medida. Una regla sin evidencia no se aplica.",
+      "name": "apply_morph_tunnel",
+      "parameters": {
+        "properties": {
+          "call_graph": {
+            "description": "Grafo de llamadas (dict de CallGraph: source, root {name, kind, t_count, qubits, children}).",
+            "type": "object"
+          },
+          "method": {
+            "description": "Método de búsqueda (por defecto greedy).",
+            "enum": [
+              "greedy",
+              "beam"
+            ],
+            "type": "string"
+          },
+          "rules": {
+            "description": "Reglas (si no se pasan, las del registro, con evidencia medida).",
+            "type": "array"
+          }
+        },
+        "required": [
+          "call_graph"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Decodifica una configuración JSON con directivas en lenguaje natural (vocabulario controlado): meta_mvp, pasos, directivas decodificadas y las no parseadas (con su motivo). Nada se descarta en silencio.",
+      "name": "decode_json_config",
+      "parameters": {
+        "properties": {
+          "config": {
+            "description": "Config: meta_mvp, steps [{step, method, params}], directives [\"sube la meta a 30\", ...], budget.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "config"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Corre el orquestador adaptativo sobre un flujo de candidatos con una config JSON: cribados, promovidos, tunelados, mejor GM, si la meta se alcanzó y los artefactos. La meta solo la alcanza un candidato REAL (un target es una hipótesis).",
+      "name": "run_orchestrator",
+      "parameters": {
+        "properties": {
+          "best_S": {
+            "description": "Mejor S por tarea, ej. {\"dqi\": 3.714e12}.",
+            "type": "object"
+          },
+          "candidates": {
+            "description": "Lista de candidatos (cada uno con name, kind, meta, metrics y, si aplica, call_graph).",
+            "type": "array"
+          },
+          "config": {
+            "description": "Config: meta_mvp, directives, budget.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "candidates"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Pasa el filtro de integridad obligatorio sobre una evidencia de circuito (sigma, C/B restaurados, dreg/alpha en cero, temporales, shots). Un 'projection' (solo números, sin circuito) NUNCA pasa este filtro.",
+      "name": "check_integrity",
+      "parameters": {
+        "properties": {
+          "evidence": {
+            "description": "Evidencia: kind (circuit|projection), sigma, sigma_ref_hash, c_restored, b_restored, total_coef, dreg_zero, alpha_zero, temporaries_zero, temporaries_total, allowed_dirty, shots, verified_by.",
+            "type": "object"
+          }
+        },
+        "required": [
+          "evidence"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Exporta e inyecta un módulo promovido al dataset de trabajo: su estructura completa (grafo de llamadas) y su código ejecutable (module.py), para evaluarlo y compilarlo. No es el submission.zip (ese sigue fail-closed).",
+      "name": "export_module",
+      "parameters": {
+        "properties": {
+          "record": {
+            "description": "Record promovido: iteration, gm, S, ratios, task, kind, meta, metrics, call_graph, source, integrity.",
+            "type": "object"
+          },
+          "runs_dir": {
+            "description": "Directorio de runs (si no, temporal).",
+            "type": "string"
+          }
+        },
+        "required": [
+          "record"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "Valida el formato de un submission.zip (o su directorio): rutas exactas, sin duplicados ni directorio raíz extra, angle_k consecutivos sin huecos, submission.npz con las 6 claves (U, W, H2_I, H1_I, Hsym_lower, tree_edges). Fail-closed: cualquier fallo bloquea el envío.",
+      "name": "validate_submission",
+      "parameters": {
+        "properties": {
+          "path": {
+            "description": "Ruta del ZIP o del directorio a validar.",
+            "type": "string"
+          },
+          "task_statuses": {
+            "description": "Estados de los tres verificadores (invsqrt/dqi/dfthcsos), si se quiere la puerta fail-closed completa.",
+            "type": "object"
+          },
+          "mode": {
+            "description": "Modo de la puerta: 'full' (por defecto) o 'smoke'.",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "La guía: junta el mejor componente por tarea (entre corridas) y dice si la combinación llega al puntaje objetivo, cuánto le falta a cada tarea y, si llega, exporta los tres en un ZIP de auditoría para auditarlos.",
+      "name": "combine_best",
+      "parameters": {
+        "properties": {
+          "target_gm": {
+            "description": "Puntaje objetivo (meta_mvp, por defecto 30.00).",
+            "type": "number"
+          },
+          "runs_dir": {
+            "description": "Directorio de runs (su best_per_task.json).",
+            "type": "string"
+          },
+          "export": {
+            "description": "Si el objetivo se alcanza, escribe el ZIP de auditoría.",
+            "type": "boolean"
+          }
+        },
+        "required": [],
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "function": {
+      "description": "La puerta de promoción: lo que exige meta_mvp (ratio DQI necesario, S objetivo) y, si se pasa S, la GM y si promueve.",
+      "name": "promotion_gate",
+      "parameters": {
+        "properties": {
+          "S": {
+            "description": "S por tarea, ej. {\"dqi\": 3.7e11}.",
+            "type": "object"
+          },
+          "meta_mvp": {
+            "description": "La meta absoluta exigida (por defecto 30.0).",
+            "type": "number"
+          }
+        },
+        "type": "object"
+      }
+    },
+    "type": "function"
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "mutate",
+      "description": "El mutador autónomo: genera candidatos mutando la semilla con las cuatro estrategias (morph, ventana SA, salto Lévy, MWIS).",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "seed_graph": {
+            "type": "object",
+            "description": "el grafo de llamadas base (dict)"
+          },
+          "task": {
+            "type": "string",
+            "description": "invsqrt | dqi | dfthcsos"
+          },
+          "base_metrics": {
+            "type": "object",
+            "description": "métricas de la semilla (Q, T, eps_plus...)"
+          },
+          "n": {
+            "type": "integer",
+            "default": 10
+          },
+          "seed": {
+            "type": "integer",
+            "default": 42
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "nombres de reglas MORPH (si no, todas)"
+          }
+        },
+        "required": [
+          "seed_graph",
+          "task",
+          "base_metrics"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "run_serial",
+      "description": "La orquestación en serie con compensación global: corre las tareas en serie con el mismo ledger y acepta el balance global cuando la GM combinada llega al objetivo.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "jobs": {
+            "type": "array",
+            "description": "trabajos por tarea (task, seed_graph, base_metrics, n)"
+          },
+          "target_gm": {
+            "type": "number",
+            "default": 30.0
+          },
+          "runs_dir": {
+            "type": "string",
+            "description": "directorio de runs"
+          },
+          "export_notebook": {
+            "type": "boolean",
+            "description": "exporta también el .ipynb si llega"
+          }
+        },
+        "required": [
+          "jobs"
+        ]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
+      "name": "export_notebook",
+      "description": "Exporta los tres módulos ganadores a un Notebook .ipynb ejecutable.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "runs_dir": {
+            "type": "string",
+            "description": "directorio de runs (best_per_task.json y dataset/)"
+          },
+          "out_path": {
+            "type": "string",
+            "description": "ruta del .ipynb (si no, winners.ipynb)"
+          },
+          "target_gm": {
+            "type": "number",
+            "description": "puntaje objetivo (meta_mvp)"
+          }
+        },
+        "required": []
+      }
+    }
+  }
+]

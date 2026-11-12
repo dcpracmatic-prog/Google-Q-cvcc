@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — meta porcentual con regla de paro (fase 5).
+"""AUTO_MVP — meta porcentual con regla de paro (fase 5) (desde v0.3.0).
 
 La especificación pide definir metas porcentuales y escalar el tiempo
 de cómputo "de forma proporcional". Aquí eso es concreto y acotado:

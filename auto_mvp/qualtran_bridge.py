@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.6.0 — puente Qualtran: la formalización algorítmica.
+"""AUTO_MVP — puente Qualtran: la formalización algorítmica (desde v0.6.0).
 
 La formalización algorítmica del sistema NO se inventa desde cero:
 es Qualtran (su representación de circuitos y su modelo de costo).

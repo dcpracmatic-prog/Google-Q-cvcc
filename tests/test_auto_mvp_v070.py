@@ -60,7 +60,7 @@ def _cli(*args, inp=None, cwd=None):
 
 
 def test_cli_version_and_gate():
-    assert _cli("version")["version"] == "1.0.1"
+    assert _cli("version")["version"] == "1.1.0"
     g = _cli("gate", "--meta-mvp", "30")
     assert abs(g["required_dqi_ratio"] - 127.335) < 0.01
     assert abs(g["target_S_dqi"] - 1.916e11) / 1.916e11 < 1e-3
@@ -139,7 +139,8 @@ def test_mcp_server_roundtrip():
     assert [t["name"] for t in by_id[2]["tools"]] == [
         "evaluate_candidate", "apply_morph_tunnel", "decode_json_config",
         "run_orchestrator", "check_integrity", "export_module",
-        "validate_submission", "combine_best", "promotion_gate"]
+        "validate_submission", "combine_best", "promotion_gate",
+        "mutate", "run_serial", "export_notebook"]
     gate = json.loads(by_id[3]["content"][0]["text"])
     assert abs(gate["required_dqi_ratio"] - 127.335) < 0.01
     ev = json.loads(by_id[4]["content"][0]["text"])
@@ -159,12 +160,13 @@ def test_tools_py_functions():
 
 def test_functions_json_schema():
     funcs = json.loads((SKILL / "functions.json").read_text())
-    assert isinstance(funcs, list) and len(funcs) == 9
+    assert isinstance(funcs, list) and len(funcs) == 12
     names = [f["function"]["name"] for f in funcs]
     assert names == ["evaluate_candidate", "apply_morph_tunnel",
                      "decode_json_config", "run_orchestrator",
                      "check_integrity", "export_module",
-                     "validate_submission", "combine_best", "promotion_gate"]
+                     "validate_submission", "combine_best", "promotion_gate",
+                     "mutate", "run_serial", "export_notebook"]
     for f in funcs:
         assert "parameters" in f["function"]
         assert f["function"]["parameters"]["type"] == "object"
@@ -179,7 +181,8 @@ def test_skill_files_and_readme():
     readme = (REPO / "README.md").read_text()
     for op in ("evaluate_candidate", "apply_morph_tunnel", "decode_json_config",
                "run_orchestrator", "check_integrity", "export_module",
-               "validate_submission", "combine_best", "promotion_gate"):
+               "validate_submission", "combine_best", "promotion_gate",
+               "mutate", "run_serial", "export_notebook"):
         assert op in readme
     assert "SKILL.md" not in [p.name for p in SKILL.iterdir()]
 

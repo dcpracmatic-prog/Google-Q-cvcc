@@ -1,4 +1,4 @@
-"""AUTO_MVP v1.0.0 — la guía: el mejor por tarea, entre corridas.
+"""AUTO_MVP — la guía: el mejor por tarea, entre corridas (desde v1.0.0).
 
 La idea de Arturo (2026-11-11): el auto-optimizador es una GUÍA,
 no un compilador ni un validador. Su trabajo es juntar la base de

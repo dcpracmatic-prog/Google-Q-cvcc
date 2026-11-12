@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.5.0 — núcleo MWIS (LOGIC_CORE v4 de Arturo).
+"""AUTO_MVP — núcleo MWIS (LOGIC_CORE v4 de Arturo) (desde v0.5.0).
 
 Port fiel del núcleo de LOGIC_CORE v4 (``LOGIC_CORE_v4_OPTIMIZADO``):
 conjunto independiente de peso máximo (MWIS) sobre el grafo de

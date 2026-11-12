@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — núcleo autónomo de optimización para VQCC.
+"""AUTO_MVP — núcleo autónomo de optimización para VQCC (desde v0.3.0).
 
 Construye sobre el corrector v0.2.1-vqcc (auto_mvp.vqcc) y el paquete
 genérico de auto-reparación v0.1.0 (auto_mvp.healing), y añade lo
@@ -45,10 +45,19 @@ from .numeric_lab import (NUMERIC_WARNING, fail_closed_gate,
                           float_pass_table, numeric_lab)
 from .observer import (AdaptiveObservabilityMembrane, Observer,
                        observe_trials)
+from .accel import available as accel_available
+from .accel import dijkstra as accel_dijkstra
+from .accel import spmm_csr_dense as accel_spmm_csr_dense
+from .accel import swar_friction as accel_swar_friction
+from .combiner import BestLedger, combine, export_audit_zip
+from .mutator import Mutation, Mutator
+from .notebook import export_winner_notebook
 from .operations import (OPERATIONS, apply_morph_tunnel, check_integrity,
-                         decode_json_config, evaluate_candidate,
-                         export_module, promotion_gate, run_orchestrator,
-                         validate_submission)
+                         combine_best, decode_json_config,
+                         evaluate_candidate, export_module, export_notebook,
+                         mutate, promotion_gate, run_orchestrator,
+                         run_serial, validate_submission)
+from .serial import run_serial as run_serial_tasks
 from .packaging import (EXPECTED_NPZ_KEYS, build_submission_zip,
                         submission_ready, validate_submission_dir,
                         validate_submission_zip)
@@ -62,7 +71,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "1.0.1"
+__version__ = "1.1.0"
 
 __all__ = [
     "Checkpoint",
@@ -84,7 +93,6 @@ __all__ = [
     "one_to_two_improve", "solve_mwis", "total_weight",
     "NUMERIC_WARNING", "fail_closed_gate", "float_pass_table", "numeric_lab",
     "AdaptiveObservabilityMembrane", "Observer", "observe_trials",
-    "AutoMvp", "MvpResult",
     "QUALTRAN_VERSION", "Block", "CallGraph", "from_qualtran_bloq",
     "DQI_R", "RULES", "ReplacementRule", "TunnelMove", "TunnelResult",
     "tunnel",
@@ -93,12 +101,18 @@ __all__ = [
     "DEFAULT_STEPS", "StepPlan",
     "AdaptiveOrchestrator", "OrchestratorResult",
     "OPERATIONS", "apply_morph_tunnel", "check_integrity",
-    "decode_json_config", "evaluate_candidate", "export_module",
-    "promotion_gate", "run_orchestrator", "validate_submission",
+    "combine_best", "decode_json_config", "evaluate_candidate",
+    "export_module", "export_notebook", "mutate", "promotion_gate",
+    "run_orchestrator", "run_serial", "validate_submission",
+    "BestLedger", "combine", "export_audit_zip",
+    "Mutation", "Mutator",
+    "run_serial_tasks",
+    "export_winner_notebook",
+    "accel_available", "accel_dijkstra", "accel_spmm_csr_dense",
+    "accel_swar_friction",
     "WorkingDataset", "export_candidate", "render_module",
     "EXPECTED_NPZ_KEYS", "build_submission_zip", "submission_ready",
     "validate_submission_dir", "validate_submission_zip",
-    "WorkingDataset", "export_candidate", "render_module",
     "CandidateMeta", "MetadataProxy", "ProxyVerdict",
     "calibrate_proxy", "estimate_S", "proxy_merit",
     "__version__",

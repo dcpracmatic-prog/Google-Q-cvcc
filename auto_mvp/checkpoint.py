@@ -1,4 +1,4 @@
-"""AUTO_MVP v0.3.0 — checkpoint inmediato de cada mejor (fase 5).
+"""AUTO_MVP — checkpoint inmediato de cada mejor (fase 5) (desde v0.3.0).
 
 La especificación pide "salva asíncrona de récords": cada vez que
 aparece una configuración superior, se congela de inmediato como el
