@@ -58,7 +58,7 @@ def _cli(*args, inp=None, cwd=None):
 
 
 def test_cli_version_and_gate():
-    assert _cli("version")["version"] == "1.0.0"
+    assert _cli("version")["version"] == "1.1.0"
     g = _cli("gate", "--meta-mvp", "30")
     assert abs(g["required_dqi_ratio"] - 127.335) < 0.01
     assert abs(g["target_S_dqi"] - 1.916e11) / 1.916e11 < 1e-3
