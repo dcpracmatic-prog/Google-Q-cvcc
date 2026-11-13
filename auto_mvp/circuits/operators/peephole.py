@@ -31,6 +31,7 @@ las semillas: la receta (K, seed) reconstruye lo mismo.
 """
 from __future__ import annotations
 
+from decimal import Context, Decimal, localcontext
 from pathlib import Path
 
 # Compuertas autoinversas: G·G = I (con los mismos operandos).
@@ -89,19 +90,30 @@ def peephole_clean(lines: list[str]) -> tuple[list[str], dict]:
             pop, pargs, pline, _ = pending
             if op == "Z_POW" and pop == "Z_POW" and args and pargs \
                     and args[0] == pargs[0]:
-                # Fusionar: sumar ángulos en vueltas (mod 2).
+                # Fusionar: sumar ángulos en vueltas (mod 2), en
+                # Decimal EXACTO (los ángulos del .kmx son decimales
+                # de 60 dígitos; por float se pierde ~1e-16 y el S
+                # medido se mueve ~5e-04 — hallazgo de la auditoría
+                # de v2.5 en rotation_merge; y el contexto por defecto
+                # redondea a 28 dígitos, por eso prec=100).
                 try:
-                    a = (float(pargs[1]) + float(args[1])) % 2.0
-                except (IndexError, ValueError):
+                    with localcontext(Context(prec=100)):
+                        a = (Decimal(pargs[1]) + Decimal(args[1])) % 2
+                except (IndexError, ValueError, ArithmeticError):
                     a = None
                 if a is not None:
-                    if a == 0.0:
+                    if a == 0:
                         pending = None
                         stats["removed"] += 2
                         stats["zpow_removed"] += 2
                     else:
-                        pending = ("Z_POW", [args[0], repr(a)],
-                                   f"Z_POW {args[0]} {a!r}", depth)
+                        # normalize() quita los ceros sobrantes de la
+                        # suma (0.25+0.75 = 1.00 -> 1.0).
+                        astr = format(a.normalize(), "f")
+                        if "." not in astr:
+                            astr += ".0"
+                        pending = ("Z_POW", [args[0], astr],
+                                   f"Z_POW {args[0]} {astr}", depth)
                         stats["zpow_fused"] += 1
                     continue
             if op == pop and op in SELF_INVERSE and args == pargs:

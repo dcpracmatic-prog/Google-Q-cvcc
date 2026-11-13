@@ -1,10 +1,30 @@
-# STATUS.md — estado del repo (v2.4.0)
+# STATUS.md — estado del repo (v2.5.0)
 
 Última actualización: 2026-11-12. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.5.0** (2026-11-12): INNOVAR, PROBAR, AUDITAR (directiva de
+  Arturo 2026-11-12 22:04 CST). Dos piezas:
+  - **ROTATION_MERGE** (`auto_mvp/circuits/operators/rotation_merge.py`):
+    fusión de Z_POW a través de compuertas que conmutan (X con cambio
+    de signo, control de CX, diagonales, SWAP). En la semilla invsqrt:
+    **0 fusiones, negativo medido** (los 68 Z_POW están aislados).
+    La auditoría encontró DOS bugs reales y los corrigió: (1) las
+    Z_POW condicionales (20) entraban en la pendiente incondicional
+    e invalidaban el circuito; (2) los ángulos por float (repr con
+    notación científica que el parser rechaza, y ~1e-16 de pérdida
+    que movía el S 4.7e-04) — ahora Decimal EXACTO prec=100, S
+    idéntico, válido, idempotente. El peephole (v2.4) tenía el mismo
+    bug latente en su fusión y se corrigió igual.
+  - **REPORT** (`auto_mvp/report.py`): el reporte estructurado de
+    una corrida — cuantitativo (propuestas, válidas, mejor S,
+    ganancia, peephole, prefilter, modelo) y cualitativo (comentario
+    en simple generado por reglas, no inventado). Corrida de prueba
+    en `notes/v2.5.0-run.md`: 3 propuestas, 3 válidas, ganancia 0,
+    peephole 132, prefilter 15 descartados, modelo sin llave. La
+    nota de versión está en `notes/v2.5.0.md`.
 - **v2.4.0** (2026-11-12): LA HERRAMIENTA, con lo que sirve de lo
   revisado (directiva de Arturo 2026-11-12 01:56 CST: crear la
   herramienta en GitHub, usar lo que sirva, que trate de dar mejores

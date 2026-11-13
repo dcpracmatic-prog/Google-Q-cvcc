@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.4.0"
+__version__ = "2.5.0"
 
 __all__ = [
     "Checkpoint",
@@ -131,6 +131,8 @@ __all__ = [
     "dqi_estimate_variant", "dqi_sweep",
     "peephole_clean", "clean_peephole_file",
     "eea_trace", "dialog_bezout", "playback",
+    "rotation_merge", "merge_rotations_file",
+    "build_report", "render_report",
 ]
 
 
@@ -197,4 +199,13 @@ def __getattr__(name: str):
         from .circuits.dialog import dialog_bezout, eea_trace, playback
         return {"eea_trace": eea_trace, "dialog_bezout": dialog_bezout,
                 "playback": playback}[name]
+    if name in ("rotation_merge", "merge_rotations_file"):
+        from .circuits.operators.rotation_merge import (
+            merge_file, rotation_merge)
+        return {"rotation_merge": rotation_merge,
+                "merge_rotations_file": merge_file}[name]
+    if name in ("build_report", "render_report"):
+        from .report import build_report, render_markdown
+        return {"build_report": build_report,
+                "render_report": render_markdown}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
