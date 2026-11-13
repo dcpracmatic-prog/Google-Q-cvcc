@@ -1,10 +1,31 @@
-# STATUS.md — estado del repo (v2.5.0)
+# STATUS.md — estado del repo (v2.6.0)
 
-Última actualización: 2026-11-12. Todo lo que dice aquí está
+Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.6.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, segunda vuelta
+  (directiva de Arturo 2026-11-13 01:06 CST). Tres piezas:
+  - **DQI .kmb → .kmx**: el .kmb público SÍ se convierte a .kmx en
+    sandbox (893 MB, 64.222.295 líneas, 11.9 s). La versión en
+    memoria de los operadores se moría por OOM a esa escala, así
+    que **peephole y rotation_merge ahora procesan en STREAMING**
+    (línea a línea, sin cargar el circuito entero) y el DQI sí
+    pasa. El SA no es práctico a esa escala (64M de instrucciones).
+  - **CONEXIÓN**: rotation_merge ya es pre-paso optativo del
+    corredor (`propose_sa_windows` y `run_llm_auto`,
+    `--rotation-merge`) y la receta lo guarda para reconstruir la
+    cadena igual. Corrida de prueba con la fusión encendida: 2
+    propuestas, 2 válidas, ganancia 0, fusión 0 (ver
+    `notes/v2.6.0-run.md`).
+  - **BENCHMARK** (`auto_mvp/benchmark.py`): cada operador medido
+    en el mismo circuito, en una tabla (válido, S, ΔS). En la
+    semilla invsqrt los tres dan ΔS = 0.0 (ver
+    `notes/v2.6.0-benchmark-invsqrt.md`). Y lo reportado como
+    óptimo se probó con ventana mayor: **sa_windows K=8, ganancia
+    0, válido, S idéntico** — la semilla sigue óptima para esas
+    ventanas.
 - **v2.5.0** (2026-11-12): INNOVAR, PROBAR, AUDITAR (directiva de
   Arturo 2026-11-12 22:04 CST). Dos piezas:
   - **ROTATION_MERGE** (`auto_mvp/circuits/operators/rotation_merge.py`):

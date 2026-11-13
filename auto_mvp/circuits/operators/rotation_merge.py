@@ -57,12 +57,19 @@ def _split(line: str) -> tuple[str, list[str]]:
     return parts[0], parts[1:]
 
 
-def rotation_merge(lines: list[str]) -> tuple[list[str], dict]:
+def rotation_merge(lines, out=None) -> tuple[list[str] | None, dict]:
     """Fusiona Z_POW a través de compuertas que conmutan.
 
     Devuelve (líneas_limpias, stats). Solo reescrituras exactas.
+
+    Con ``out`` (una lista o un objeto con append, p. ej. un
+    escritor a disco) las líneas van ahí en vez de a una lista
+    nueva: así ``merge_file`` procesa en STREAMING y no necesita
+    cargar el circuito entero en memoria (el DQI tiene 64M de
+    líneas y la versión en memoria se moría por OOM).
     """
-    out: list[str] = []
+    if out is None:
+        out = []
     stats = {"merged": 0, "removed": 0, "zpow_in": 0, "zpow_out": 0}
     # Las pendientes son Decimal EXACTO, no float: los ángulos del
     # .kmx son decimales de 60 dígitos (aritmética racional exacta) y
@@ -174,11 +181,26 @@ def _scan(lines, out, stats, pending, emit, flush_all) -> None:
     flush_all()
 
 
+class _StreamingList(list):
+    """Una lista que escribe a disco al hacer append (streaming)."""
+
+    def __init__(self, fh):
+        self._fh = fh
+
+    def append(self, line: str) -> None:
+        self._fh.write(line + "\n")
+
+
 def merge_file(in_path: str | Path, out_path: str | Path) -> dict:
-    """Fusiona las rotaciones de un .kmx en disco. Devuelve las stats."""
+    """Fusiona las rotaciones de un .kmx en disco, en streaming.
+
+    Devuelve las stats.
+    """
     in_path = Path(in_path)
     out_path = Path(out_path)
-    lines = in_path.read_text(encoding="utf-8").split("\n")
-    merged, stats = rotation_merge(lines)
-    out_path.write_text("\n".join(merged), encoding="utf-8")
+    with in_path.open(encoding="utf-8") as fin, \
+            out_path.open("w", encoding="utf-8") as fout:
+        _, stats = rotation_merge(
+            (line.rstrip("\n") for line in fin),
+            out=_StreamingList(fout))
     return stats

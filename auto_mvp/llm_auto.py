@@ -110,7 +110,8 @@ def _rebuild_best(task: str, best: dict[str, Any], runs_dir: Path,
         prop = propose_sa_windows(
             current, nxt, log, K=int(recipe["K"]),
             budget_s=float(recipe.get("budget_s", sa_budget_s)),
-            seed=int(recipe["seed"]))
+            seed=int(recipe["seed"]),
+            rotation_merge=bool(recipe.get("rotation_merge", False)))
         if not prop["ok"]:
             raise RuntimeError(
                 f"no se pudo reconstruir el paso {step_i} de la cadena "
@@ -215,6 +216,7 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                  batch_size: int = 5,
                  expensive_per_round: int = 1,
                  prefilter_margin: float = 0.25,
+                 rotation_merge: bool = False,
                  on_proposal: Callable[[dict[str, Any]], None] | None = None
                  ) -> dict[str, Any]:
     """Corredor con modelo de lenguaje + prefilter (v2.3); solo salen semillas.
@@ -371,12 +373,14 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                 log = Path(tmp) / f"cand_p{i:04d}.json"
                 prop = propose_sa_windows(work, cand, log, K=K,
                                           budget_s=float(sa_budget_s),
-                                          seed=op_seed)
+                                          seed=op_seed,
+                                          rotation_merge=bool(rotation_merge))
                 entry: dict[str, Any] = {
                     "proposal": i, "K": K, "seed": op_seed, "llm": llm_ok,
                     "reason_llm": reason, "operator": "sa_windows",
                     "gain_reported": prop.get("gain", 0),
                     "peephole": prop.get("peephole", {}),
+                    "rotation_merge": prop.get("rotation_merge", {}),
                     "prefilter_S_est": verdict.s_estimate,
                     "prefilter": ("exploración sin historial"
                                   if explored else "ganador del prefilter")}
@@ -417,7 +421,8 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                                 measure["toffoli_count"],
                                 {"base": "invsqrt_pub", "K": K,
                                  "seed": op_seed, "gain": prop.get("gain", 0),
-                                 "budget_s": float(sa_budget_s)},
+                                 "budget_s": float(sa_budget_s),
+                                 "rotation_merge": bool(rotation_merge)},
                                 parent=best["id"],
                                 notes=f"propuesta {i} (K={K}, seed={op_seed})")
                             save_seed(new_best, runs_dir)
@@ -496,6 +501,8 @@ def main(argv: list[str] | None = None) -> int:
                     help="ganadores del prefilter que llegan a kickmix")
     ap.add_argument("--prefilter-margin", type=float, default=0.25,
                     help="margen calibrado del proxy (def. 0.25)")
+    ap.add_argument("--rotation-merge", action="store_true",
+                    help="pasar la fusión de rotaciones (v2.6) antes del SA")
     args = ap.parse_args(argv)
     res = run_llm_auto(
         args.target_S, runs_dir=args.runs_dir,
@@ -504,7 +511,8 @@ def main(argv: list[str] | None = None) -> int:
         sa_budget_s=args.sa_budget_s, provider=args.provider,
         seed=args.seed, batch_size=args.batch_size,
         expensive_per_round=args.expensive_per_round,
-        prefilter_margin=args.prefilter_margin)
+        prefilter_margin=args.prefilter_margin,
+        rotation_merge=args.rotation_merge)
     print(json.dumps(res, indent=2, ensure_ascii=False))
     return 0 if res["reached"] else 1
 

@@ -38,11 +38,14 @@ def build_report(runs_dir: str | Path) -> dict[str, Any]:
     best_s = best.get("S")
     measured_s = [m["S"] for m in measured if m.get("S") is not None]
     run_best = min(measured_s) if measured_s else None
-    # El peephole se reporta por propuesta en el progreso
-    # (seed-progress.jsonl): el ledger solo guarda un resumen de las
-    # medidas sin peephole. Se suma una vez por número de propuesta.
+    # El peephole y la fusión de rotaciones se reportan por propuesta
+    # en el progreso (seed-progress.jsonl): el ledger solo guarda un
+    # resumen de las medidas sin esos detalles. Se suma una vez por
+    # número de propuesta.
     peephole_removed = 0
     peephole_pairs = 0
+    rotation_merged = 0
+    rotation_removed = 0
     seen: set[Any] = set()
     prog_path = Path(runs_dir) / "seed-progress.jsonl"
     if prog_path.is_file():
@@ -58,11 +61,17 @@ def build_report(runs_dir: str | Path) -> dict[str, Any]:
             ph = e.get("peephole") or {}
             peephole_removed += int(ph.get("removed", 0))
             peephole_pairs += int(ph.get("pairs_cancelled", 0))
+            rm = e.get("rotation_merge") or {}
+            rotation_merged += int(rm.get("merged", 0))
+            rotation_removed += int(rm.get("removed", 0))
     if not seen:
         for e in rejected + measured:
             ph = e.get("peephole") or {}
             peephole_removed += int(ph.get("removed", 0))
             peephole_pairs += int(ph.get("pairs_cancelled", 0))
+            rm = e.get("rotation_merge") or {}
+            rotation_merged += int(rm.get("merged", 0))
+            rotation_removed += int(rm.get("removed", 0))
     gains = [m.get("gain_reported", 0) for m in measured]
     proposals = int(led.get("proposals", 0))
     valid = int(led.get("valid", 0))
@@ -96,6 +105,10 @@ def build_report(runs_dir: str | Path) -> dict[str, Any]:
                 f"El peephole quitó {peephole_removed} compuertas "
                 f"Clifford ({peephole_pairs} pares) sin tocar el S: "
                 "limpieza, no mejora de puntuación.")
+        if rotation_merged:
+            comments.append(
+                f"La fusión de rotaciones juntó {rotation_merged} "
+                f"rotaciones ({rotation_removed} eliminadas).")
         ranked = int(led.get("prefilter_ranked", 0))
         discarded = int(led.get("prefilter_discarded", 0))
         if ranked:
@@ -121,6 +134,8 @@ def build_report(runs_dir: str | Path) -> dict[str, Any]:
         "gain_total": sum(gains),
         "peephole_removed": peephole_removed,
         "peephole_pairs": peephole_pairs,
+        "rotation_merged": rotation_merged,
+        "rotation_removed": rotation_removed,
         "prefilter_ranked": int(led.get("prefilter_ranked", 0)),
         "prefilter_discarded": int(led.get("prefilter_discarded", 0)),
         "prefilter_winners": int(led.get("prefilter_winners", 0)),
@@ -148,6 +163,8 @@ def render_markdown(rep: dict[str, Any]) -> str:
              f"total {rep['gain_total']}",
              f"- Peephole: {rep['peephole_removed']} compuertas quitadas "
              f"({rep['peephole_pairs']} pares cancelados)",
+             f"- Fusión de rotaciones: {rep['rotation_merged']} juntas "
+             f"({rep['rotation_removed']} eliminadas)",
              f"- Prefilter: {rep['prefilter_ranked']} ordenados, "
              f"{rep['prefilter_discarded']} descartados, "
              f"{rep['prefilter_winners']} ganadores del paso caro",

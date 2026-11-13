@@ -73,7 +73,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
 
 __all__ = [
     "Checkpoint",
@@ -133,6 +133,7 @@ __all__ = [
     "eea_trace", "dialog_bezout", "playback",
     "rotation_merge", "merge_rotations_file",
     "build_report", "render_report",
+    "benchmark", "render_benchmark",
 ]
 
 
@@ -208,4 +209,8 @@ def __getattr__(name: str):
         from .report import build_report, render_markdown
         return {"build_report": build_report,
                 "render_report": render_markdown}[name]
+    if name in ("benchmark", "render_benchmark"):
+        from .benchmark import benchmark, render_markdown
+        return {"benchmark": benchmark,
+                "render_benchmark": render_markdown}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

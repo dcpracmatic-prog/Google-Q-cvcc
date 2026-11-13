@@ -381,7 +381,7 @@ def fast_verify_invsqrt(path: str | Path, *, max_x: int = 1024,
 def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
                        log_path: str | Path, *, K: int = 5,
                        budget_s: float = 60.0, seed: int = 1,
-                       peephole: bool = True
+                       peephole: bool = True, rotation_merge: bool = False
                        ) -> dict[str, Any]:
     """Un candidato real con sa_windows (el operador de Arturo).
 
@@ -399,6 +399,15 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
     mismo, y su ganancia se reporta aparte ("peephole"). En la
     semilla invsqrt quita 44 compuertas Clifford (18 pares CX + 4 X)
     sin cambiar el S medido (las Clifford no cuentan en C).
+
+    Con rotation_merge=True (v2.6, optativo, por defecto apagado),
+    después del peephole se pasa la fusión de rotaciones
+    (auto_mvp/circuits/operators/rotation_merge): junta Z_POW
+    separadas por compuertas que conmutan. En la semilla invsqrt da
+    0 fusiones (negativo medido); en circuitos con más rotaciones
+    sí fusiona. Su estadística se reporta aparte
+    ("rotation_merge") y la receta la guarda, así que la cadena la
+    reconstruye igual.
     """
     src = Path(seed_path)
     peephole_stats: dict[str, int] = {"removed": 0, "zpow_fused": 0,
@@ -410,6 +419,14 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
             Path(out_path).stem + ".peephole.kmx")
         peephole_stats = clean_file(src, tmp_clean)
         src = tmp_clean
+    rotation_stats: dict[str, int] = {"merged": 0, "removed": 0,
+                                      "zpow_in": 0, "zpow_out": 0}
+    if rotation_merge:
+        from .circuits.operators.rotation_merge import merge_file
+        tmp_rot = Path(out_path).with_name(
+            Path(out_path).stem + ".rotation.kmx")
+        rotation_stats = merge_file(src, tmp_rot)
+        src = tmp_rot
     cmd = [sys.executable, str(SA_WINDOWS), str(src), str(out_path),
            str(log_path), str(int(K)), str(float(budget_s)), str(int(seed))]
     try:
@@ -417,11 +434,13 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
                               timeout=float(budget_s) + 180)
     except subprocess.TimeoutExpired:
         return {"ok": False, "gain": 0, "reason": "sa_windows excedió su tiempo",
-                "peephole": peephole_stats}
+                "peephole": peephole_stats,
+                "rotation_merge": rotation_stats}
     if proc.returncode != 0:
         return {"ok": False, "gain": 0,
                 "reason": (proc.stderr or proc.stdout or "sa_windows falló")[:300],
-                "peephole": peephole_stats}
+                "peephole": peephole_stats,
+                "rotation_merge": rotation_stats}
     gain = 0
     try:
         gain = int(json.loads(Path(log_path).read_text(
@@ -429,4 +448,5 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
     except Exception:
         gain = 0
     return {"ok": True, "gain": gain, "reason": "",
-            "peephole": peephole_stats}
+            "peephole": peephole_stats,
+            "rotation_merge": rotation_stats}

@@ -47,15 +47,22 @@ def _split(line: str) -> tuple[str, list[str]]:
     return parts[0], parts[1:]
 
 
-def peephole_clean(lines: list[str]) -> tuple[list[str], dict]:
+def peephole_clean(lines, out=None) -> tuple[list[str] | None, dict]:
     """Limpia un .kmx (lista de líneas) con la ruta Fast.
 
     Devuelve (líneas_limpias, stats). Las líneas que no son
     compuertas (REGISTER, APPEND_TO_REGISTER, comentarios, vacías)
     pasan tal cual. Solo se combinan compuertas consecutivas a la
     misma profundidad de condición.
+
+    Con ``out`` (una lista o un objeto con append, p. ej. un
+    escritor a disco) las líneas limpias van ahí en vez de a una
+    lista nueva: así ``clean_file`` procesa en STREAMING y no
+    necesita cargar el circuito entero en memoria (el DQI tiene
+    64M de líneas y la versión en memoria se moría por OOM).
     """
-    out: list[str] = []
+    if out is None:
+        out = []
     stats = {"removed": 0, "zpow_fused": 0, "zpow_removed": 0,
              "pairs_cancelled": 0}
     depth = 0
@@ -128,11 +135,28 @@ def peephole_clean(lines: list[str]) -> tuple[list[str], dict]:
     return out, stats
 
 
+class _StreamingList(list):
+    """Una lista que escribe a disco al hacer append (streaming).
+
+    Hereda de list para que el código que la recibe no cambie, pero
+    no guarda nada: cada línea va directa al archivo. Así los
+    operadores trabajan en circuitos de 64M de líneas sin OOM.
+    """
+
+    def __init__(self, fh):
+        self._fh = fh
+
+    def append(self, line: str) -> None:
+        self._fh.write(line + "\n")
+
+
 def clean_file(in_path: str | Path, out_path: str | Path) -> dict:
-    """Limpia un .kmx en disco. Devuelve las stats."""
+    """Limpia un .kmx en disco, en streaming. Devuelve las stats."""
     in_path = Path(in_path)
     out_path = Path(out_path)
-    lines = in_path.read_text(encoding="utf-8").split("\n")
-    cleaned, stats = peephole_clean(lines)
-    out_path.write_text("\n".join(cleaned), encoding="utf-8")
+    with in_path.open(encoding="utf-8") as fin, \
+            out_path.open("w", encoding="utf-8") as fout:
+        _, stats = peephole_clean(
+            (line.rstrip("\n") for line in fin),
+            out=_StreamingList(fout))
     return stats
