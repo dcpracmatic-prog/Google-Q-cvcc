@@ -1,10 +1,21 @@
-# STATUS.md — estado del repo (v2.7.0)
+# STATUS.md — estado del repo (v2.8.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.8.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
+  (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 2/5).
+  Una pieza:
+  - **DETECTOR DE FAN-OUT** (`auto_mvp/circuits/operators/fanout.py`,
+    streaming, una pasada): rachas de CCX con el mismo AND (c1 & c2)
+    y objetivos distintos, con comprobación de validez (ninguna
+    compuerta entre los CCX puede tocar c1, c2 o los objetivos).
+    Medido: semilla 6 grupos por subflujo, **0 válidos, 0 T**; DQI
+    33.575 grupos, **0 válidos, 0 T** (93.1 s). El ~33 T del estudio
+    de reescritura NO sobrevive a la validez (ver `notes/v2.8.0.md`).
+    La reescritura queda sin nada que reescribir.
 - **v2.7.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, tercera vuelta
   (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5). Tres piezas:
   - **PEEPHOLE CON PILA**: la pasada con una sola compuerta
