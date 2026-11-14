@@ -1,10 +1,31 @@
-# STATUS.md — estado del repo (v2.16.0)
+# STATUS.md — estado del repo (v2.17.0)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.17.0** (2026-11-14): pedido de Arturo (el Notebook solo un
+  código de ejecución delgado; la lógica vive en el repo). Nuevo
+  `auto_mvp/autonomous.py`: generación AUTÓNOMA de semillas de
+  circuitos desde el repositorio. `LocalLLM` (Qwen2.5-Coder-1.5B-
+  Instruct local, GGUF Q4_K_M, llama-cpp-python, temp 0.7, sin
+  Gemini/Groq; `llama_cpp` se importa perezoso), `validate_code`
+  (guarda de imports: solo math/typing/auto_mvp/kickmix),
+  `setup_kaggle` (encuentra la competencia y deja kickmix con
+  Circuit) y `run_autonomous` (sin base, sin baseline, sin
+  puntuación máxima: la primera semilla se genera y se mide, cada
+  semilla nueva —parametrización propuesta por el LLM— solo trata
+  de hacerlo mejor que la mejor hasta ahora; al final el LLM
+  propone una parametrización nueva `novel_nslot` chica y se mide
+  una semilla con ella). Guarda `semillas.json` (las semillas +
+  sus parametrizaciones), `param_nueva.json` y `VEREDICTO.json`.
+  Sin modelo, sigue con los knobs por defecto. Probado en sandbox
+  con cliente falso (5 semillas a escala chica, mejor toom3
+  T=22,152 S=3.42e10; novel_nslot n=7 medido; código roto no
+  aborta). Tests 5/5 (`tests/test_autonomous.py`). El Notebook de
+  Kaggle ahora es delgado (2 celdas de código: instalar + ejecutar
+  `run_autonomous`). Detalle en `notes/v2.17.0.md`.
 - **v2.16.0** (2026-11-14): pedido de Arturo (que el LLM optimice
   durante la ejecución). Nuevo `auto_mvp/llm_auto_dqi.py`: el
   estratega propone deltas DQI (batch, nslot, toom3) como JSON, el
