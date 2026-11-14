@@ -1,10 +1,21 @@
-# STATUS.md — estado del repo (v2.14.0)
+# STATUS.md — estado del repo (v2.15.0)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.15.0** (2026-11-14): pedido de Arturo (generador híbrido DQI).
+  Nuevo `auto_mvp/circuits/generators/build_hybrid_bm.py`: decodificador
+  BM + Forney con descomposición híbrida (sin reg_b, contrato solo de
+  fase, MBUC/HMR, inversiones Montgomery por lotes, BM en vez de EEA).
+  Verificado a escala chica (`--verify`: PASS; sigma 24/24, scan limpio
+  12/12, circuito completo S restaurado 10/10 y ancillas a |0>).
+  Escala completa (n=70, m=4095, batch=17): Q=6,791, T=1,900,947,
+  S proyectado 1.04e14. **No competitivo todavía**: 4.3x peor que el
+  baseline (2.44e13). Falta reutilización de slots S + reconstrucción
+  de B (hacia Q~1,414) y Toom-3 (hacia T menor). Detalle en
+  `notes/v2.15.0.md`.
 - **v2.14.0** (2026-11-14): pedido de Arturo (que los pases apunten
   a lo que cobra el S, no a limpiar Clifford). Cuatro piezas:
   - **rotation_merge: Z_POW en controles de CCX/CSWAP pasa**
