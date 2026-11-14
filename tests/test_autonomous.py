@@ -151,6 +151,38 @@ def test_autonomous_sin_llm_sigue_con_defecto(tmp_path):
     assert res["param_nueva"]["status"] == "falló"
 
 
+def test_autonomous_medicion_que_falla_no_tumba(tmp_path, monkeypatch):
+    # v2.17.2: si la medición de UNA semilla falla, se registra como
+    # inválida y la corrida sigue (antes tumbaba todo sin guardar
+    # nada). Se simula fallando la 2ª medición.
+    import auto_mvp.llm_auto_dqi as _dqi
+    real_measure = _dqi._measure_knobs
+    calls = {"n": 0}
+
+    def flaky(n, m, batch, nslot, toom3, verify=True):
+        calls["n"] += 1
+        if calls["n"] == 2:
+            raise RuntimeError("falla simulada del generador")
+        return real_measure(n, m, batch, nslot, toom3, verify=verify)
+
+    monkeypatch.setattr(_dqi, "_measure_knobs", flaky)
+    fake = _FakeLLM(code_ok=True)
+    res = run_autonomous(
+        fake, n=10, m=15, n_semillas=2, time_budget_seconds=300,
+        output_dir=tmp_path, seed=42, verify=True)
+    # La corrida terminó: semilla 0 válida, semilla 1 inválida
+    # (medición falló), semilla 2 válida. No se tumbó.
+    assert len(res["semillas"]) >= 3
+    assert res["semillas"][0]["valid"] is True
+    assert res["semillas"][1]["valid"] is False
+    assert res["invalid"] >= 1
+    assert res["mejor"]["valid"] is True
+    # El progreso quedó en archivo (con flush) para diagnosticar.
+    prog = (tmp_path / "progreso.txt").read_text()
+    assert "semilla" in prog
+    assert (tmp_path / "semillas.json").exists()
+
+
 def test_autonomous_codigo_roto_no_aborta(tmp_path):
     fake = _FakeLLM(code_ok=False)
     res = run_autonomous(

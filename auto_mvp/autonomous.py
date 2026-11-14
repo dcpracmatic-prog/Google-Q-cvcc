@@ -359,6 +359,15 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     cada semilla nueva solo trata de hacerlo mejor que la mejor
     hasta ahora (mejora interna, autónoma).
 
+    Robustez (v2.17.2, tras el error del Notebook v3 en Kaggle):
+    cada semilla se mide dentro de try/except — si una medición
+    falla (knobs que el generador rechaza, falta de memoria), se
+    registra como inválida y se sigue con la siguiente, en vez de
+    tumbar toda la corrida. Y si `output_dir` se da, cada semilla
+    se escribe en `progreso.txt` (con flush) al medirse, para ver
+    dónde se quedó la corrida si el kernel muere (Kaggle no da el
+    mensaje de error).
+
     Devuelve {n, m, R, llm_calls, llm_fallbacks, mejor, semillas,
     param_nueva}. Si `output_dir` se da, guarda `semillas.json`
     (las semillas + sus parametrizaciones), `param_nueva.json` y
@@ -373,26 +382,55 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     # eso se importa AQUÍ, después de `setup_kaggle()`.
     from .llm_auto_dqi import R_DQI, _measure_knobs, _parse_deltas
 
+    out_dir = Path(output_dir) if output_dir is not None else None
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+    def _log_progreso(msg: str) -> None:
+        """Progreso a archivo (con flush) + stderr: si el kernel
+        muere, el archivo dice dónde se quedó."""
+        line = f"[autónomo] {msg}"
+        print(line, file=sys.stderr, flush=True)
+        if out_dir is not None:
+            with open(out_dir / "progreso.txt", "a",
+                      encoding="utf-8") as _fh:
+                _fh.write(line + "\n")
+
     def _progress(entry: dict[str, Any]) -> None:
-        print(f"[autónomo] {entry}", file=sys.stderr, flush=True)
+        _log_progreso(json.dumps(entry, ensure_ascii=False, default=str))
         if on_seed is not None:
             on_seed(entry)
+
+    def _medir_seguro(batch: int, nslot: int, toom3: bool,
+                      seed_i: int) -> dict[str, Any] | None:
+        """Mide UNA semilla; si la medición falla, devuelve None
+        (se registra y se sigue, no se tumba la corrida)."""
+        try:
+            return _measure_knobs(n, m, int(batch), int(nslot),
+                                  bool(toom3), verify=verify)
+        except Exception as exc:
+            _log_progreso(
+                f"semilla {seed_i} (batch={batch}, nslot={nslot}, "
+                f"toom3={toom3}): MEDICIÓN FALLÓ: "
+                f"{type(exc).__name__}: {str(exc)[:200]}")
+            return None
 
     started = time.monotonic()
     semillas: list[dict[str, Any]] = []
     llm_calls = 0
     llm_fallbacks = 0
+    invalid = 0
 
     # Semilla 0: la primera, generada (sin base: es la primera
     # semilla, no una referencia).
-    primera = _measure_knobs(n, m, 4, min_nslot, False, verify=verify)
+    primera = _medir_seguro(4, min_nslot, False, 0)
+    if primera is None or not primera["valid"]:
+        raise RuntimeError(
+            "la primera semilla no se pudo medir o no es válida: "
+            f"{(primera or {}).get('reason', '')}")
     primera.update({"semilla": 0,
                     "origen": "primera generada (sin base)",
                     "mejora": False})
-    if not primera["valid"]:
-        raise RuntimeError(
-            "la primera semilla no es válida: "
-            f"{primera.get('reason', '')}")
     semillas.append(primera)
     mejor = dict(primera)
     best_S = float(primera["S"])
@@ -423,14 +461,27 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
             llm_error = str(exc)[:200]
             delta = _default_delta(i, min_nslot, seed)
             llm_fallbacks += 1
-        entry = _measure_knobs(n, m, delta["batch"], delta["nslot"],
-                               delta["toom3"], verify=verify)
+        entry = _medir_seguro(delta["batch"], delta["nslot"],
+                              delta["toom3"], i)
+        if entry is None:
+            invalid += 1
+            semillas.append({"semilla": int(i),
+                             "batch": int(delta["batch"]),
+                             "nslot": int(delta["nslot"]),
+                             "toom3": bool(delta["toom3"]),
+                             "valid": False,
+                             "origen": "LLM local" if llm_ok else "por defecto",
+                             "reason_llm": delta.get("reason", ""),
+                             "mejora": False,
+                             "note": "MEDICIÓN FALLÓ: no cuenta"})
+            continue
         entry.update({"semilla": int(i),
                       "origen": "LLM local" if llm_ok else "por defecto",
                       "reason_llm": delta.get("reason", "")})
         if llm_error:
             entry["llm_error"] = llm_error
         if not entry["valid"]:
+            invalid += 1
             entry["mejora"] = False
             entry["note"] = "INVÁLIDA: no cuenta"
         elif entry["S"] < best_S:
@@ -471,22 +522,28 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
                 raise ValueError(
                     f"novel_nslot devolvió {ns!r}, inválido "
                     f"(< {min_nslot} o no entero)")
-            entry = _measure_knobs(n, m, mejor["batch"], int(ns),
-                                   mejor["toom3"], verify=verify)
-            entry.update({"semilla": len(semillas),
-                          "origen": "parametrización nueva (novel_nslot)",
-                          "mejora": bool(entry["valid"]
-                                         and entry["S"] < best_S)})
-            if entry["mejora"]:
-                best_S = float(entry["S"])
-                mejor = dict(entry)
-            semillas.append(entry)
-            param_nueva.update({"status": "medido", "nslot": int(ns),
-                                "Q": entry["qubits"],
-                                "T": entry["toffoli_like"],
-                                "S": entry["S"], "valid": entry["valid"],
-                                "mejora": entry["mejora"]})
-            _progress(entry)
+            entry = _medir_seguro(mejor["batch"], int(ns),
+                                  mejor["toom3"], len(semillas))
+            if entry is None:
+                param_nueva.update({"status": "falló",
+                                    "error": "la medición de la semilla "
+                                             "con novel_nslot falló"})
+                _log_progreso("parametrización nueva: medición falló")
+            else:
+                entry.update({"semilla": len(semillas),
+                              "origen": "parametrización nueva (novel_nslot)",
+                              "mejora": bool(entry["valid"]
+                                             and entry["S"] < best_S)})
+                if entry["mejora"]:
+                    best_S = float(entry["S"])
+                    mejor = dict(entry)
+                semillas.append(entry)
+                param_nueva.update({"status": "medido", "nslot": int(ns),
+                                    "Q": entry["qubits"],
+                                    "T": entry["toffoli_like"],
+                                    "S": entry["S"], "valid": entry["valid"],
+                                    "mejora": entry["mejora"]})
+                _progress(entry)
     except Exception as exc:
         param_nueva.update({"status": "falló",
                             "error": str(exc)[:300]})
@@ -496,15 +553,14 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     result: dict[str, Any] = {
         "n": int(n), "m": int(m), "R": R_DQI,
         "llm_calls": llm_calls, "llm_fallbacks": llm_fallbacks,
+        "invalid": invalid,
         "mejor": mejor, "semillas": semillas,
         "param_nueva": param_nueva,
     }
-    if output_dir is not None:
-        out = Path(output_dir)
-        out.mkdir(parents=True, exist_ok=True)
-        (out / "semillas.json").write_text(
+    if out_dir is not None:
+        (out_dir / "semillas.json").write_text(
             json.dumps(result, indent=2, default=str))
-        (out / "param_nueva.json").write_text(
+        (out_dir / "param_nueva.json").write_text(
             json.dumps(param_nueva, indent=2, default=str))
         veredicto = {
             "repo": "https://github.com/dcpracmatic-prog/"
@@ -514,12 +570,13 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
                    "local en Kaggle, sin Gemini/Groq",
             "llm_calls": llm_calls,
             "llm_fallbacks": llm_fallbacks,
+            "invalid": invalid,
             "mejor_semilla": mejor,
             "primera_semilla_S": semillas[0]["S"],
             "mejora_interna_ratio": semillas[0]["S"] / mejor["S"],
             "semillas": semillas,
         }
-        (out / "VEREDICTO.json").write_text(
+        (out_dir / "VEREDICTO.json").write_text(
             json.dumps(veredicto, indent=2, default=str))
     return result
 
