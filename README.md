@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.8.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.9.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -38,13 +38,17 @@ ninguna compuerta entre los CCX puede tocar los controles o los
 objetivos). Medido: en la semilla 6 grupos por subflujo y 0 válidos
 (0 T); en el DQI 33.575 grupos y 0 válidos (0 T). El ~33 T del
 estudio de reescritura no sobrevive a la validez: los controles son
-acumuladores que cambian entre los CCX.
+acumuladores que cambian entre los CCX. La v2.9 mete: el detector de
+fan-out integrado al BENCHMARK como cuarto operador (la tabla ya
+compara peephole, rotation_merge, fanout y sa_windows en el mismo
+circuito; en la semilla el fan-out reporta 0 T en 0 grupos válidos).
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace (v2.8: el modelo propone un lote, el prefilter ordena,
+## Qué hace (v2.9: el modelo propone un lote, el prefilter ordena,
 el peephole con pila limpia, la fusión de rotaciones es optativa, el
-detector de fan-out mide dónde se podría colapsar un AND, y
+detector de fan-out mide dónde se podría colapsar un AND, el
+benchmark compara los cuatro operadores en el mismo circuito, y
 cada corrida deja su reporte y su benchmark en `notes/`)
 
 - **Corredor con modelo + prefilter

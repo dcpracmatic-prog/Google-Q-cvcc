@@ -1,4 +1,4 @@
-"""AUTO_MVP v2.6 — el BENCHMARK: cada operador medido en el mismo
+"""AUTO_MVP v2.9 — el BENCHMARK: cada operador medido en el mismo
 circuito, en una tabla.
 
 La herramienta tenía operadores (peephole, rotation_merge,
@@ -8,6 +8,11 @@ El benchmark corre los tres sobre el mismo .kmx y produce una
 comparación estructurada: por operador, qué quitó o fusionó, si el
 circuito sigue siendo válido y cómo quedó el S. Así se ve de un
 vistazo cuál operador sirve en ese circuito y cuál no.
+
+La v2.9 añade el FAN-OUT como cuarto operador de la tabla: no
+reescribe el circuito (no hay grupos válidos que reescribir en la
+semilla ni en el DQI), pero su potencial medido aparece junto a los
+demás, para que la comparación sea completa.
 
 Todo se mide con el protocolo oficial (fast_verify_invsqrt,
 max_x=1024). El sa_windows corre con K y presupuesto chicos (por
@@ -21,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 from .circuit import fast_verify_invsqrt, propose_sa_windows
+from .circuits.operators.fanout import detect_fanout_file
 from .circuits.operators.peephole import clean_file
 from .circuits.operators.rotation_merge import merge_file
 
@@ -109,6 +115,19 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
                           or base_toffoli is None else
                           int(r_meas["toffoli_like"]) - int(base_toffoli)),
     }
+    # Fan-out (medición, no reescribe el circuito: el potencial es
+    # lo que se ahorraría si los grupos válidos se colapsaran).
+    f_rep = detect_fanout_file(src)
+    result["operators"]["fanout"] = {
+        "stats": {"num_groups": f_rep["num_groups"],
+                  "num_valid": f_rep["num_valid"],
+                  "total_potential_T": f_rep["total_potential_T"]},
+        "valid": True,
+        "S": base_S,
+        "delta_S": 0 if base_S is not None else None,
+        "toffoli_like": base_toffoli,
+        "delta_toffoli": 0 if base_toffoli is not None else None,
+    }
     # sa_windows (con peephole como pre-paso, como en el corredor).
     # En circuitos enormes se salta: el SA no es práctico a esa escala.
     if run_sa:
@@ -147,6 +166,13 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
     # Lo cualitativo, por reglas.
     comments: list[str] = []
     for name, op in result["operators"].items():
+        if name == "fanout":
+            st = op["stats"]
+            comments.append(
+                f"fanout: potencial {st['total_potential_T']} T en "
+                f"{st['num_valid']} grupos válidos "
+                f"(de {st['num_groups']} por subflujo).")
+            continue
         if op["valid"] is None:
             comments.append(f"{name}: {op.get('reason', 'saltado')}.")
         elif op["valid"] is False:

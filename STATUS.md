@@ -1,10 +1,20 @@
-# STATUS.md — estado del repo (v2.8.0)
+# STATUS.md — estado del repo (v2.9.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.9.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
+  (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 3/5).
+  Una pieza:
+  - **FAN-OUT EN EL BENCHMARK** (`auto_mvp/benchmark.py`): el
+    detector de v2.8 es el cuarto operador de la comparación (no
+    reescribe, mide su potencial junto a los demás). Tabla de la
+    semilla en `notes/v2.9.0-benchmark-invsqrt.md`: peephole 122
+    Clifford ΔS 0, rotation_merge 0 fusiones ΔS 0, fanout 6 grupos
+    0 válidos 0 T, sa_windows saltado. Ningún operador mejora el S
+    de la semilla: todos están en su punto fijo (ver `notes/v2.9.0.md`).
 - **v2.8.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
   (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 2/5).
   Una pieza:
