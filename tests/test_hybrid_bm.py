@@ -68,3 +68,21 @@ def test_small_full_build_counts():
     assert info["qubits"] > 0
     assert info["toffoli_like"] > 0
     assert info["scan"]["batches"] == 4
+
+
+def test_toom3_lowest_T_same_Q():
+    # Toom-3 (45 T/mult) baja T vs el nativo (63 T/mult) sin subir Q.
+    _, native = build_hybrid_bm_circuit(n=10, m=15, batch=4, nslot=6,
+                                        toom3=False)
+    _, toom3 = build_hybrid_bm_circuit(n=10, m=15, batch=4, nslot=6,
+                                       toom3=True)
+    assert toom3["toffoli_like"] < native["toffoli_like"]
+    assert toom3["qubits"] == native["qubits"]
+    assert toom3["toom3"] is True
+
+
+def test_verify_small_toom3_passes():
+    res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=4,
+                       toom3=True)
+    assert res["bm_sigma_correct"] == res["bm_sigma_total"] == 24
+    assert res["scan_registers_intact"] == res["scan_registers_total"] == 12

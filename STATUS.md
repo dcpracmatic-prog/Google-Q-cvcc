@@ -1,10 +1,22 @@
-# STATUS.md — estado del repo (v2.15.0)
+# STATUS.md — estado del repo (v2.16.0)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.16.0** (2026-11-14): pedido de Arturo (que el LLM optimice
+  durante la ejecución). Nuevo `auto_mvp/llm_auto_dqi.py`: el
+  estratega propone deltas DQI (batch, nslot, toom3) como JSON, el
+  generador híbrido materializa y se mide Q/T/S (S = R*Q^2*T,
+  R=1.1912605); solo el menor S sobrevive. Toom-3 vendoreado en el
+  repo (`toom3.py` + `mult51.py` + `poly_mul_2/6.txt`, 45 T/mult
+  vs 63 T nativo; escala completa T 1,900,947 -> 1,519,563, Q igual
+  6,791, S 1.04e14 -> 8.35e13). Sin llave, el corredor sigue con
+  los knobs por defecto. Probado con cliente falso (mejora con
+  toom3 guardada) y sin llave (cae al defecto). Tests 17/17.
+  El LLM real no se probó aquí (no hay llave en este entorno).
+  Detalle en `notes/v2.16.0.md`.
 - **v2.15.0** (2026-11-14): pedido de Arturo (generador híbrido DQI).
   Nuevo `auto_mvp/circuits/generators/build_hybrid_bm.py`: decodificador
   BM + Forney con descomposición híbrida (sin reg_b, contrato solo de

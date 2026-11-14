@@ -46,9 +46,11 @@ La llave va en el entorno (`GEMINI_API_KEY` o `GROQ_API_KEY`; en
 Kaggle, como secreto del notebook). Sin llave, corre igual con
 sa_windows y lo dice en el ledger (`llm: "sin llave"`).
 
-v2.2 cubre invsqrt de punta a punta. DQI y química tienen su formato
-de semilla (`auto_mvp/seed.py`) pero sus materializadores (generador
-DQI, entrenador de factorización) están pendientes.
+v2.2 cubre invsqrt de punta a punta. DQI ya tiene su materializador
+(`auto_mvp/circuits/generators/build_hybrid_bm.py`) y su corredor
+LLM (`auto_mvp/llm_auto_dqi.py`, v2.16): el estratega mueve
+batch/nslot/toom3 durante la ejecución. Química sigue pendiente
+(entrenador de factorización).
 """
 from __future__ import annotations
 

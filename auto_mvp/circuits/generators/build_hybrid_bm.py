@@ -45,19 +45,25 @@ Alcance honesto (2026-11-14, medido):
   escala chica contra la referencia clásica (``--verify``: PASS;
   sigma 24/24, scan limpio 12/12, circuito completo S restaurado
   10/10 y ancillas a |0> 6/6+6/6).
-- El circuito usa las operaciones GF nativas de kickmix
-  (``ixor_gf2_mul``, ``init_gf2_inverse_with_scaffold``), no el
-  multiplicador Toom-3 del sandbox (45 T). La T medida aquí es por tanto
-  una cota superior; el Toom-3 es una optimización posterior.
+- El circuito usa por defecto las operaciones GF nativas de kickmix
+  (``ixor_gf2_mul``, 63 T/mult). Con ``toom3=True`` usa el
+  multiplicador Toom-3 vendoreado (``toom3.emit_ixor_toom3``, 45
+  T/mult, verificado 4/4 en el repo incl. target no cero; Q no sube
+  porque las ancillas se reutilizan). Medido a escala completa
+  (n=70, m=4095, batch=17): Toom-3 baja T de 1,900,947 a 1,519,563
+  (-20.1%) y S de 1.04e14 a 8.35e13, con Q igual (6,791).
+  El knob `toom3` lo mueve el LLM estratega
+  (``auto_mvp/llm_auto_dqi.py``) durante la ejecución.
 - Medido a escala completa (n=70, m=4095, batch=17): Q=6,791,
-  T=1,900,947, S proyectado = 1.04e14 (R=1.1912605). Es 4.3x PEOR que
-  el baseline (2.44e13) y 5.2x peor que el ensamble (1.998e13), y muy
+  T=1,900,947 (nativo) / 1,519,563 (Toom-3), S proyectado = 1.04e14
+  / 8.35e13 (R=1.1912605). Es 4.3x / 3.4x PEOR que el baseline
+  (2.44e13) y 5.2x / 4.2x peor que el ensamble (1.998e13), y muy
   lejos del público híbrido (3.77e11). La limpieza de temporales
   (paso 22: mult/ainv/scaffold, hist_mult) ya está aplicada y bajó Q
   de 10,991 a 6,791. Lo que falta para competir es la reutilización
   de slots S + reconstrucción de B (``PLAN_SLOT_REUSE.md``) para bajar
-  Q hacia ~1,414, y el Toom-3 para bajar T. Eso es el siguiente paso,
-  no un resultado de este generador.
+  Q hacia ~1,414. Eso es el siguiente paso, no un resultado de este
+  generador.
 - Verificado a escala chica (n <= 10) contra la referencia clásica.
   La construcción a escala completa (n=70, m=4095) usa los mismos
   bloques; su Q/T se mide con ``--measure`` (solo construcción).
@@ -253,13 +259,39 @@ def hmr_uncompute_and(bld, a, b, work, bit):
 
 
 def gf_mul_acc(bld, x, y, target):
-    """target ^= x * y en GF(2^12) (multiplicación nativa kickmix).
+    """target ^= x * y en GF(2^12).
 
-    `x`, `y`, `target` son registros de 12 qubits. Usa
-    ``ixor_gf2_mul`` (el multiplicador nativo; la T exacta depende de
-    la implementación de kickmix, no del Toom-3 de 45 T del sandbox).
+    `x`, `y`, `target` son registros de 12 qubits. Por defecto usa
+    ``ixor_gf2_mul`` (el multiplicador nativo, 63 T). Si el módulo
+    está en modo Toom-3 (``set_toom3(True)``, que activa
+    ``build_hybrid_bm_circuit(..., toom3=True)``), usa el emisor
+    Toom-3 vendoreado (``toom3.emit_ixor_toom3``, 45 T, verificado
+    4/4 en el repo incl. target no cero).
     """
-    bld.ixor_gf2_mul(x, y, target=target, field=FIELD)
+    _ixor_mul(bld, x, y, target)
+
+
+# El multiplicador que usa el generador: nativo (63 T) o Toom-3 (45 T).
+# Lo mueve `build_hybrid_bm_circuit(..., toom3=...)` y lo propone el
+# LLM estratega como delta. Es un flag de módulo (no un parámetro
+# por función) porque `ixor_gf2_mul` se llama directo en bm_forward,
+# compute_omega, montgomery_batch, hybrid_scan y bm_backward.
+_TOOM3 = False
+
+
+def set_toom3(on: bool) -> None:
+    """Activa/desactiva el multiplicador Toom-3 para todo el módulo."""
+    global _TOOM3
+    _TOOM3 = bool(on)
+
+
+def _ixor_mul(bld, x, y, target):
+    """target ^= x * y: Toom-3 (45 T) si está activo, nativo (63 T) si no."""
+    if _TOOM3:
+        from auto_mvp.circuits.generators.toom3 import emit_ixor_toom3
+        emit_ixor_toom3(bld, x, y, target)
+    else:
+        bld.ixor_gf2_mul(x, y, target=target, field=FIELD)
 
 
 def gf_mul_new(bld, x, y):
@@ -415,12 +447,12 @@ def bm_forward(bld, S, n, nslot=36):
         is_le = bld.alloc_qubits(1)[0]
         flag = bld.alloc_qubits(1)
         # a. discrepancia
-        bld.ixor_gf2_mul(C[0], S[r], target=dreg, field=FIELD)
+        _ixor_mul(bld, C[0], S[r], dreg)
         for i in range(1, NSLOT):
             if r - i >= 0:
-                bld.ixor_gf2_mul(C[i], S[r - i], target=dreg, field=FIELD)
+                _ixor_mul(bld, C[i], S[r - i], dreg)
         # b. alpha y alpha_inv
-        bld.ixor_gf2_mul(dreg, C[0], target=alpha_reg, field=FIELD)
+        _ixor_mul(bld, dreg, C[0], alpha_reg)
         _, scaffold = bld.init_gf2_inverse_with_scaffold(
             alpha_reg, target=ainv_reg, field=FIELD)
         # c. flag replace = (d != 0) AND (2L <= r)
@@ -438,7 +470,7 @@ def bm_forward(bld, S, n, nslot=36):
             for k in range(DEGREE):
                 bld.cswap(flag[0], C[i][k], B[i][k])
         for i in range(NSLOT):
-            bld.ixor_gf2_mul(mult_reg, B[i], target=C[i], field=FIELD)
+            _ixor_mul(bld, mult_reg, B[i], C[i])
         # e2. LIMPIEZA (paso 22): guardar mult en historia persistente
         #    y liberar el mult de trabajo, el inverso y su scaffold.
         #    El atrás usa hist_mult (no el mult de trabajo). Ahorra
@@ -498,8 +530,7 @@ def compute_omega(bld, C, S, n, nslot=36):
     for k in range(nslot):
         for i in range(min(k, nslot - 1) + 1):
             if k - i < n:
-                bld.ixor_gf2_mul(C[i], S[k - i], target=OMG[k],
-                                 field=FIELD)
+                _ixor_mul(bld, C[i], S[k - i], OMG[k])
     return OMG
 
 
@@ -604,13 +635,13 @@ def montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg):
             a1, f1 = eval_sigma_prime(bld, C, L, xs[0], zero_reg)
             a2, f2 = eval_sigma_prime(bld, C, L, xs[1], zero_reg)
             p[2] = bld.alloc_qubits(DEGREE)
-            bld.ixor_gf2_mul(a1, a2, target=p[2], field=FIELD)
+            _ixor_mul(bld, a1, a2, p[2])
             uneval_sigma_prime(bld, C, L, xs[0], a1, f1, zero_reg)
             uneval_sigma_prime(bld, C, L, xs[1], a2, f2, zero_reg)
         else:
             ai, fi = eval_sigma_prime(bld, C, L, xs[i - 1], zero_reg)
             p[i] = bld.alloc_qubits(DEGREE)
-            bld.ixor_gf2_mul(p[i - 1], ai, target=p[i], field=FIELD)
+            _ixor_mul(bld, p[i - 1], ai, p[i])
             uneval_sigma_prime(bld, C, L, xs[i - 1], ai, fi, zero_reg)
     # ---- una inversión ----
     q = [None] * (b + 1)
@@ -622,9 +653,9 @@ def montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg):
         r_inv = bld.alloc_qubits(DEGREE)
         if i == 2:
             a1, f1 = eval_sigma_prime(bld, C, L, xs[0], zero_reg)
-            bld.ixor_gf2_mul(q[2], a1, target=r_inv, field=FIELD)
+            _ixor_mul(bld, q[2], a1, r_inv)
         else:
-            bld.ixor_gf2_mul(q[i], p[i - 1], target=r_inv, field=FIELD)
+            _ixor_mul(bld, q[i], p[i - 1], r_inv)
         s_acc, o_acc = eval_sigma_omega(bld, C, OMG, L, xs[i - 1],
                                         kjs[i - 1])
         is_root, located = phase_kick(bld, s_acc, o_acc, r_inv, E[i - 1])
@@ -641,7 +672,7 @@ def montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg):
             bld.free(r_inv)
         ai, fi = eval_sigma_prime(bld, C, L, xs[i - 1], zero_reg)
         q[i - 1] = bld.alloc_qubits(DEGREE)
-        bld.ixor_gf2_mul(q[i], ai, target=q[i - 1], field=FIELD)
+        _ixor_mul(bld, q[i], ai, q[i - 1])
         uneval_sigma_prime(bld, C, L, xs[i - 1], ai, fi, zero_reg)
         if i == 2:
             s_acc, o_acc = eval_sigma_omega(bld, C, OMG, L, xs[0], kjs[0])
@@ -767,7 +798,7 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
         # e. deshacer update (con hist_mult, no el mult de trabajo) y
         #    swap C<->B. hist_mult se libera tras usarlo.
         for i in range(NSLOT):
-            bld.ixor_gf2_mul(hist_mult, B[i], target=C[i], field=FIELD)
+            _ixor_mul(bld, hist_mult, B[i], C[i])
         for i in range(NSLOT):
             for k in range(DEGREE):
                 bld.cswap(flag[0], C[i][k], B[i][k])
@@ -784,12 +815,12 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
         bld.flip_if_equal(dreg, 0, target=is_d_nonzero)
         # b. deshacer alpha (ainv/scaffold ya se liberaron en el
         #    adelante). alpha ^= d*C[0] otra vez (cancela).
-        bld.ixor_gf2_mul(dreg, C[0], target=alpha_reg, field=FIELD)
+        _ixor_mul(bld, dreg, C[0], alpha_reg)
         # a. deshacer discrepancia
-        bld.ixor_gf2_mul(C[0], S[r], target=dreg, field=FIELD)
+        _ixor_mul(bld, C[0], S[r], dreg)
         for i in range(1, NSLOT):
             if r - i >= 0:
-                bld.ixor_gf2_mul(C[i], S[r - i], target=dreg, field=FIELD)
+                _ixor_mul(bld, C[i], S[r - i], dreg)
         # liberar temporales de la ronda
         bld.free(dreg)
         bld.free(alpha_reg)
@@ -810,12 +841,18 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
 # Ensamblaje: el decodificador híbrido completo
 # ------------------------------------------------------------------
 def build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,
-                            nslot=36):
+                            nslot=36, toom3=False):
     """Construye el circuito DQI híbrido completo.
 
     Entradas: S (n registros de 12 qubits, síndrome) + E (m registros
     clásicos de 12 bits, máscaras M_j). Salida: la fase DQI aplicada
     y S restaurado.
+
+    Knobs que mueve el LLM estratega (deltas DQI):
+      batch: tamaño del lote Montgomery (T).
+      nslot: slots C/B (Q; debe ser >= Lmax+1).
+      toom3: True usa el multiplicador Toom-3 vendoreado (45 T/mult)
+        en vez del nativo (63 T/mult); False usa el nativo.
 
     Fases:
       1. BM adelante -> sigma C (y B, L, hist).
@@ -824,6 +861,14 @@ def build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,
       4. BM atrás -> restaura S, libera C/B.
     Devuelve (circ, info) donde info trae Q, T y los registros.
     """
+    set_toom3(bool(toom3))
+    try:
+        return _build_hybrid_bm_circuit(n, degree, m, batch, nslot)
+    finally:
+        set_toom3(False)
+
+
+def _build_hybrid_bm_circuit(n, degree, m, batch, nslot):
     bld = km.CircuitBuilder()
     S = [bld.alloc_qubits(DEGREE) for _ in range(n)]
     # E son las máscaras M_j: entradas CLÁSICAS (bits, no qubits).
@@ -840,7 +885,8 @@ def build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,
     st = circ.operation_statistics()
     info = {
         "n": n, "degree": degree, "m": m, "batch": batch,
-        "nslot": nslot, "qubits": circ.num_qubits,
+        "nslot": nslot, "toom3": bool(_TOOM3),
+        "qubits": circ.num_qubits,
         "toffoli_like": st.num_toffoli_like,
         "instructions": st.num_instructions,
         "scan": scan_info,
@@ -857,7 +903,7 @@ def _read_reg(sim, reg):
     return sum(int(bits[k, 0]) << k for k in range(DEGREE))
 
 
-def verify_small(n=10, m=15, batch=4, seed=12345, nshots=4):
+def verify_small(n=10, m=15, batch=4, seed=12345, nshots=4, toom3=False):
     """Verifica el generador a escala chica contra la referencia clásica.
 
     1. BM adelante: con un síndrome de errores conocidos, lee sigma
@@ -865,8 +911,17 @@ def verify_small(n=10, m=15, batch=4, seed=12345, nshots=4):
     2. Hybrid scan: con sigma/omega clásicos como entrada y máscaras
        E, aplica el scan y comprueba la fase (paridad) contra la
        referencia clásica.
-    Devuelve un dict con los resultados y Q/T medidos.
+    `toom3=True` verifica con el multiplicador Toom-3 (45 T) en vez
+    del nativo (63 T). Devuelve un dict con los resultados y Q/T.
     """
+    set_toom3(bool(toom3))
+    try:
+        return _verify_small(n, m, batch, seed, nshots)
+    finally:
+        set_toom3(False)
+
+
+def _verify_small(n, m, batch, seed, nshots):
     import numpy as np
 
     rng = np.random.default_rng(seed)
@@ -1002,6 +1057,9 @@ def main():
     ap.add_argument("--m", type=int, default=4095)
     ap.add_argument("--batch", type=int, default=17)
     ap.add_argument("--nslot", type=int, default=36)
+    ap.add_argument("--toom3", action="store_true",
+                    help="multiplicador Toom-3 (45 T/mult) en vez del "
+                         "nativo (63 T/mult)")
     ap.add_argument("--format", default="kmb", choices=["kmb", "kmx"])
     ap.add_argument("--out", default="dqi_hybrid.kmb")
     ap.add_argument("--verify", action="store_true",
@@ -1013,7 +1071,7 @@ def main():
     if args.verify:
         t0 = time.time()
         res = verify_small(n=10, m=15, batch=4, seed=args.seed,
-                           nshots=args.shots)
+                           nshots=args.shots, toom3=args.toom3)
         res["verify_seconds"] = round(time.time() - t0, 1)
         print(json.dumps(res, indent=2))
         ok = (res["bm_sigma_correct"] == res["bm_sigma_total"]
@@ -1024,7 +1082,8 @@ def main():
     t0 = time.time()
     circ, info = build_hybrid_bm_circuit(n=args.n, degree=args.degree,
                                          m=args.m, batch=args.batch,
-                                         nslot=args.nslot)
+                                         nslot=args.nslot,
+                                         toom3=args.toom3)
     info["build_seconds"] = round(time.time() - t0, 1)
     circ.to_file(args.out, format=args.format)
     import os
