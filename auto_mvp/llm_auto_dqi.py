@@ -36,9 +36,13 @@ Uso::
 
     python -m auto_mvp.llm_auto_dqi --target-S 1e13 --max-proposals 6
 
-La llave va en el entorno (`GEMINI_API_KEY` o `GROQ_API_KEY`; en
-Kaggle, como secreto del notebook). Sin llave, corre igual con los
-deltas por defecto y lo dice en el resultado (`llm_fallbacks`).
+La llave NO existe: el modelo es local (Qwen2.5-Coder-1.5B-Instruct,
+GGUF Q4_K_M, llama-cpp-python, temp 0.7) y corre en la máquina, sin
+API. Si el modelo no está disponible (falta el GGUF o
+llama-cpp-python), el corredor sigue con los deltas por defecto y
+lo dice en el resultado (`llm_fallbacks`). El GGUF (~1 GB) no va en
+el repo: se baja de HuggingFace la primera vez (`LLM_MODEL_PATH` o
+`~/workspace/models/`; en Kaggle, `/kaggle/working/`).
 
 Los knobs que mueve el LLM (deltas DQI):
   batch: tamaño del lote Montgomery (T; más grande = menos
@@ -195,7 +199,6 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
                      max_proposals: int | None = None,
                      time_budget_seconds: float | None = None,
                      llm_client: Callable[[str], dict[str, Any]] | None = None,
-                     provider: str | None = None,
                      seed: int = 42, batch_size: int = 5,
                      verify: bool = True,
                      base_batch: int = 17, base_nslot: int | None = None,
@@ -222,7 +225,7 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
         raise ValueError(f"base_nslot={base_nslot} < mínimo {min_nslot}")
     if llm_client is None:
         def _real(prompt: str) -> dict[str, Any]:
-            return complete_json(prompt, provider=provider)
+            return complete_json(prompt)
         llm_client = _real
 
     def _progress(entry: dict[str, Any]) -> None:
@@ -338,7 +341,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--m", type=int, default=4095)
     ap.add_argument("--max-proposals", type=int, default=None)
     ap.add_argument("--time-budget-s", type=float, default=None)
-    ap.add_argument("--provider", type=str, default=None)
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--batch-size", type=int, default=5)
     ap.add_argument("--no-verify", action="store_true",
@@ -351,7 +353,7 @@ def main(argv: list[str] | None = None) -> int:
         args.target_S, n=args.n, m=args.m,
         max_proposals=args.max_proposals,
         time_budget_seconds=args.time_budget_s,
-        provider=args.provider, seed=args.seed,
+        seed=args.seed,
         batch_size=args.batch_size, verify=not args.no_verify,
         base_batch=args.base_batch, base_nslot=args.base_nslot,
         base_toom3=args.base_toom3)

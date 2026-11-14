@@ -1,18 +1,17 @@
-"""AUTO_MVP v2.2 — modelo de lenguaje gratis + solo salen semillas.
+"""AUTO_MVP v2.2 — modelo de lenguaje LOCAL + solo salen semillas.
 
 El modelo es el estratega (propone K y seed como JSON chico); los
 operadores verificados construyen; el verificador oficial decide.
 El Notebook no construye .kmx: el circuito vive solo en temporal y
 se borra; en runs/seeds/ quedan solo JSONs de kilobytes.
 
-Los tests del cliente LLM no tocan la red: monkeypatchean urlopen.
-Los del corredor usan un cliente falso (sin llave real).
+El modelo es LOCAL (Qwen2.5-Coder-1.5B-Instruct, GGUF Q4_K_M,
+llama-cpp-python, temp 0.7): sin llave, sin API, sin red. Los tests
+del cliente local no tocan la red: simulan el texto del modelo o la
+falta del GGUF. Los del corredor usan un cliente falso.
 """
 from __future__ import annotations
 
-import io
-import json
-import urllib.error
 from pathlib import Path
 
 import pytest
@@ -41,47 +40,28 @@ def test_seed_roundtrip_and_tamper(tmp_path):
         new_seed("otro", 1.0, 62, 1.0, {"base": "x"})
 
 
-def test_llm_client_no_key(monkeypatch):
-    for var in ("GEMINI_API_KEY", "GROQ_API_KEY", "LLM_API_KEY",
-                "LLM_PROVIDER", "LLM_MODEL"):
-        monkeypatch.delenv(var, raising=False)
+def test_llm_client_sin_modelo(monkeypatch):
+    # Sin llama-cpp-python ni GGUF, el cliente local levanta
+    # LLMError(no_model=True): el corredor cae a los knobs por defecto.
+    # No hay llave: el modelo es local, no una API.
+    monkeypatch.setenv("LLM_MODEL_PATH", "/tmp/no-existe-qwen.gguf")
+    import auto_mvp.llm as llm_mod
+    monkeypatch.setattr(llm_mod, "_LLM", None)
+    monkeypatch.setitem(__import__("sys").modules, "llama_cpp", None)
     with pytest.raises(LLMError) as exc:
         complete("hola")
-    assert exc.value.no_key is True
-
-
-def _fake_urlopen(body: dict, status: int = 200):
-    class Resp:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *a):
-            return False
-
-        def read(self):
-            return json.dumps(body).encode("utf-8")
-    return lambda req, timeout=None: Resp()
-
-
-def test_llm_client_429(monkeypatch):
-    def boom(req, timeout=None):
-        raise urllib.error.HTTPError(
-            req.full_url, 429, "Too Many Requests", {}, io.BytesIO(b""))
-    monkeypatch.setattr("urllib.request.urlopen", boom)
-    monkeypatch.setenv("GEMINI_API_KEY", "falsa")
-    with pytest.raises(LLMError) as exc:
-        complete("hola", provider="gemini")
-    assert exc.value.rate_limited is True
+    assert exc.value.no_model is True
 
 
 def test_complete_json_extracts_fenced(monkeypatch):
-    body = {"choices": [{"message": {"content":
-        'Claro, aquí va:\n```json\n{"K": 6, "seed": 123, '
-        '"reason": "probar K=6"}\n```'}}]}
-    monkeypatch.setattr("urllib.request.urlopen",
-                        _fake_urlopen(body))
-    monkeypatch.setenv("GEMINI_API_KEY", "falsa")
-    out = complete_json("propón", provider="gemini")
+    # El JSON se extrae aunque venga envuelto en ```json ... ```.
+    # Se simula el texto del modelo local (sin red ni API).
+    import auto_mvp.llm as llm_mod
+    monkeypatch.setattr(
+        llm_mod, "complete",
+        lambda prompt, **kw: 'Claro, aquí va:\n```json\n{"K": 6, '
+                            '"seed": 123, "reason": "probar K=6"}\n```')
+    out = complete_json("propón")
     assert out == {"K": 6, "seed": 123, "reason": "probar K=6"}
 
 
@@ -104,11 +84,13 @@ def test_llm_auto_fake_llm_one_proposal(tmp_path):
     assert (tmp_path / "seed_ledger.json").is_file()
 
 
-def test_llm_auto_no_key_falls_back(tmp_path):
-    def _no_key(_prompt: str) -> dict:
-        raise LLMError("sin llave", no_key=True)
+def test_llm_auto_sin_modelo_falls_back(tmp_path):
+    # Sin modelo local (GGUF o llama-cpp-python), el corredor cae a
+    # sa_windows y sigue: la corrida nunca depende del modelo.
+    def _sin_modelo(_prompt: str) -> dict:
+        raise LLMError("sin modelo", no_model=True)
     res = run_llm_auto(90000, runs_dir=tmp_path, max_proposals=1,
-                       sa_budget_s=5, llm_client=_no_key, seed=7)
+                       sa_budget_s=5, llm_client=_sin_modelo, seed=7)
     assert res["proposals"] == 1
     assert res["llm_fallbacks"] == 1 and res["llm_calls"] == 0
     assert list(Path(tmp_path).rglob("*.kmx")) == []

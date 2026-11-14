@@ -134,7 +134,6 @@ __all__ = [
     "rotation_merge", "merge_rotations_file",
     "build_report", "render_report",
     "benchmark", "render_benchmark",
-    "run_autonomous", "LocalLLM", "validate_code", "setup_kaggle",
 ]
 
 
@@ -214,12 +213,4 @@ def __getattr__(name: str):
         from .benchmark import benchmark, render_markdown
         return {"benchmark": benchmark,
                 "render_benchmark": render_markdown}[name]
-    if name in ("run_autonomous", "LocalLLM", "validate_code",
-                "setup_kaggle"):
-        from .autonomous import (
-            LocalLLM, run_autonomous, setup_kaggle, validate_code)
-        return {"run_autonomous": run_autonomous,
-                "LocalLLM": LocalLLM,
-                "validate_code": validate_code,
-                "setup_kaggle": setup_kaggle}[name]
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

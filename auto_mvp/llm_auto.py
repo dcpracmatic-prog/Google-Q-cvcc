@@ -42,9 +42,10 @@ Uso::
 
     python -m auto_mvp.llm_auto --target-S 90000 --max-proposals 10
 
-La llave va en el entorno (`GEMINI_API_KEY` o `GROQ_API_KEY`; en
-Kaggle, como secreto del notebook). Sin llave, corre igual con
-sa_windows y lo dice en el ledger (`llm: "sin llave"`).
+La llave NO existe: el modelo es local (Qwen2.5-Coder-1.5B-Instruct,
+GGUF Q4_K_M, llama-cpp-python, temp 0.7) y corre en la máquina, sin
+API. Sin modelo, corre igual con sa_windows y lo dice en el ledger
+(`llm: "sin modelo"`).
 
 v2.2 cubre invsqrt de punta a punta. DQI ya tiene su materializador
 (`auto_mvp/circuits/generators/build_hybrid_bm.py`) y su corredor
@@ -213,7 +214,6 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
                  time_budget_seconds: float | None = None,
                  sa_budget_s: float = 60.0,
                  llm_client: Callable[[str], dict[str, Any]] | None = None,
-                 provider: str | None = None,
                  seed: int = 42,
                  batch_size: int = 5,
                  expensive_per_round: int = 1,
@@ -247,7 +247,7 @@ def run_llm_auto(target_S: float, task: str = "invsqrt",
     started = time.monotonic()
     if llm_client is None:
         def _real(prompt: str) -> dict[str, Any]:
-            return complete_json(prompt, provider=provider)
+            return complete_json(prompt)
         llm_client = _real
 
     def _progress(entry: dict[str, Any]) -> None:
@@ -494,8 +494,6 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--time-budget", type=float, default=None,
                     help="segundos; si no, hasta llegar o cancelar")
     ap.add_argument("--sa-budget-s", type=float, default=60.0)
-    ap.add_argument("--provider", default=None,
-                    help="gemini (por defecto) o groq")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--batch-size", type=int, default=5,
                     help="deltas por lote que propone el modelo")
@@ -510,7 +508,7 @@ def main(argv: list[str] | None = None) -> int:
         args.target_S, runs_dir=args.runs_dir,
         max_proposals=args.max_proposals,
         time_budget_seconds=args.time_budget,
-        sa_budget_s=args.sa_budget_s, provider=args.provider,
+        sa_budget_s=args.sa_budget_s,
         seed=args.seed, batch_size=args.batch_size,
         expensive_per_round=args.expensive_per_round,
         prefilter_margin=args.prefilter_margin,
