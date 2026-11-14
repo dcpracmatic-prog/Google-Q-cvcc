@@ -2,10 +2,11 @@
 
 - PEEPHOLE (la ruta Fast de GUOQ, bien hecha): sobre el .kmx REAL
   de kickmix, con reescrituras exactas. En la semilla invsqrt quita
-  44 compuertas Clifford (18 pares CX + 4 X) y el S medido NO cambia
-  (las Clifford no cuentan en C); la validez la confirma el
-  verificador oficial. Integrado como pre-paso determinista del
-  operador sa_windows.
+  122 compuertas Clifford (56 pares CX + 5 X) en una sola pasada
+  con pila (v2.7: la pasada con una sola pendiente solo quitaba 44)
+  y el S medido NO cambia (las Clifford no cuentan en C); la
+  validez la confirma el verificador oficial. Integrado como
+  pre-paso determinista del operador sa_windows.
 - DIALOG (el acceso implícito, bien hecho): la traza algebraica
   (cocientes del EEA) + playback reconstruyen los coeficientes de
   Bézout sin haberlos guardado. 200/200 casos aleatorios: el
@@ -54,12 +55,12 @@ def test_peephole_juguete_exactitud():
     assert cleaned2 == cleaned
 
 
-def test_peephole_semilla_real_44_clifford_s_igual(tmp_path: Path):
-    """La semilla invsqrt: 44 Clifford menos (18 CX + 4 X), S idéntico."""
+def test_peephole_semilla_real_122_clifford_s_igual(tmp_path: Path):
+    """La semilla invsqrt: 122 Clifford menos (56 CX + 5 X), S idéntico."""
     out = tmp_path / "clean.kmx"
     stats = clean_file(SEED_INVSQRT, out)
-    assert stats["removed"] == 44
-    assert stats["pairs_cancelled"] == 22
+    assert stats["removed"] == 122
+    assert stats["pairs_cancelled"] == 61
     assert stats["zpow_fused"] == 0
     m_clean = fast_verify_invsqrt(str(out), max_x=1024)
     m_orig = fast_verify_invsqrt(str(SEED_INVSQRT), max_x=1024)
@@ -74,13 +75,13 @@ def test_propose_sa_windows_con_peephole(tmp_path: Path):
     prop = propose_sa_windows(SEED_INVSQRT, out, log, K=5, budget_s=5,
                               seed=1)
     assert prop["ok"] and prop["gain"] == 0
-    assert prop["peephole"]["removed"] == 44
-    assert prop["peephole"]["pairs_cancelled"] == 22
+    assert prop["peephole"]["removed"] == 122
+    assert prop["peephole"]["pairs_cancelled"] == 61
     assert out.is_file()
-    # El candidato es la semilla limpia: 44 líneas menos.
+    # El candidato es la semilla limpia: 122 líneas menos.
     n_out = len(out.read_text(encoding="utf-8").split("\n"))
     n_in = len(Path(SEED_INVSQRT).read_text(encoding="utf-8").split("\n"))
-    assert n_out == n_in - 44
+    assert n_out == n_in - 122
 
 
 def test_dialog_playback_igual_al_eea_explicito():

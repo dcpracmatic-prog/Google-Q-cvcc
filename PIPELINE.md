@@ -1,12 +1,12 @@
-# PIPELINE.md — cómo se orquestan los flujos (v2.6.0)
+# PIPELINE.md — cómo se orquestan los flujos (v2.7.0)
 
 Guía para quien (o lo que) tenga que correr o modificar el repo sin
 leer todo el código. Todo lo que dice aquí se puede comprobar en
 `auto_mvp/` y en los tests de `tests/`.
 
-## El comando único (v2.6: el modelo propone un lote, el prefilter ordena,
-el peephole limpia, la fusión de rotaciones es optativa, y cada
-corrida deja su reporte y su benchmark en `notes/`)
+## El comando único (v2.7: el modelo propone un lote, el prefilter ordena,
+el peephole con pila limpia, la fusión de rotaciones es optativa, y
+cada corrida deja su reporte y su benchmark en `notes/`)
 
 ```bash
 python -m auto_mvp.llm_auto --target-S 90000 --max-proposals 10

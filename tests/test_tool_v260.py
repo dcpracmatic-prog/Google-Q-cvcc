@@ -64,7 +64,7 @@ def test_conexion_rotation_merge_en_propose(tmp_path: Path):
     assert prop["gain"] == 0
     assert prop["rotation_merge"] == {"merged": 0, "removed": 0,
                                       "zpow_in": 48, "zpow_out": 48}
-    assert prop["peephole"]["removed"] == 44
+    assert prop["peephole"]["removed"] == 122
     m = fast_verify_invsqrt(str(cand), max_x=1024)
     assert m["valid"]
     assert m["S"] == 100585.37325984969

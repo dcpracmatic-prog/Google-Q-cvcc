@@ -1,10 +1,29 @@
-# STATUS.md — estado del repo (v2.6.0)
+# STATUS.md — estado del repo (v2.7.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.7.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, tercera vuelta
+  (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5). Tres piezas:
+  - **PEEPHOLE CON PILA**: la pasada con una sola compuerta
+    pendiente NO era idempotente (en la semilla hacían falta más
+    de 15 pasadas para llegar al punto fijo). Con pila, una sola
+    pasada encuentra TODAS las cancelaciones: en la semilla quita
+    **122 Clifford (56 CX + 5 X)** en vez de 44, S idéntico, y la
+    2ª pasada quita 0 (idempotente de verdad). En el DQI quita
+    **116.692 (58.346 pares)** en vez de 46.610, Toffoli 453.312
+    intacto (ver `notes/v2.7.0-benchmark-dqi.md`).
+  - **BENCHMARK para DQI**: la comparación ya no es solo de
+    invsqrt (`task="dqi"` mide cargar en kickmix + conteo de
+    Toffolis; el SA se salta con su razón). Tabla DQI en
+    `notes/v2.7.0-benchmark-dqi.md`.
+  - **BM+FORNEY refutado como materializador**: el diseño pierde
+    ~10× contra el híbrido público (S≈3.23e12, 6.57× vs 64.76×)
+    y la construcción a mano está incompleta (paso 51/53, sin
+    Chien completo ni .kmb). No es practicidad: queda como nota
+    para v2.8 (el materializador DQI tendrá que ser otro diseño).
 - **v2.6.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, segunda vuelta
   (directiva de Arturo 2026-11-13 01:06 CST). Tres piezas:
   - **DQI .kmb → .kmx**: el .kmb público SÍ se convierte a .kmx en

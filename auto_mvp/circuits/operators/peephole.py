@@ -24,10 +24,18 @@ Reglas (todas exactas, todas locales, sin reordenar nada):
   en distinta profundidad de condición (PUSH/POP entre medias rompe
   la adyacencia), ni nada que no sea una identidad exacta.
 
-La pasada es determinista e idempotente (una segunda pasada sobre
-un circuito ya limpio no encuentra nada), así que puede ir como
-pre-paso del operador sa_windows sin romper la reproducibilidad de
-las semillas: la receta (K, seed) reconstruye lo mismo.
+La limpieza es UNA SOLA PASADA con PILA (v2.7): la pasada con una
+sola compuerta pendiente NO era idempotente, porque al cancelar un
+par las compuertas que lo rodeaban se volvían adyacentes y solo se
+veían en la siguiente pasada (en la semilla invsqrt hacían falta
+más de 15 pasadas, 4 por pasada, para llegar al punto fijo). Con
+una pila, la salida ES la pila: cada compuerta nueva se compara
+con la última emitida, y al cancelar un par la siguiente compuerta
+se compara con la que quedó debajo, en la misma pasada. Es el
+algoritmo clásico de reducción (como cancelar paréntesis): una
+pasada encuentra TODAS las cancelaciones, así que el resultado sí
+es idempotente y no hace falta repetir. Cada reescritura sigue
+siendo exacta, así que la validez se preserva y el S no cambia.
 """
 from __future__ import annotations
 
@@ -47,56 +55,60 @@ def _split(line: str) -> tuple[str, list[str]]:
     return parts[0], parts[1:]
 
 
-def peephole_clean(lines, out=None) -> tuple[list[str] | None, dict]:
-    """Limpia un .kmx (lista de líneas) con la ruta Fast.
+def _peephole_pass(lines, out, max_pending: int = 4096) -> dict:
+    """Una sola pasada de la ruta Fast sobre las líneas, con pila.
 
-    Devuelve (líneas_limpias, stats). Las líneas que no son
-    compuertas (REGISTER, APPEND_TO_REGISTER, comentarios, vacías)
-    pasan tal cual. Solo se combinan compuertas consecutivas a la
-    misma profundidad de condición.
+    La pila guarda las compuertas emitidas que aún pueden cancelarse
+    con la siguiente (en memoria, acotada a ``max_pending``; lo
+    confirmado va a ``out`` en streaming, así que no se carga el
+    circuito entero). Cada compuerta nueva se compara con la última
+    de la pila: si es el mismo par autoinverso, se cancelan las dos
+    (se saca de la pila y la nueva no entra); si es una Z_POW sobre
+    el mismo qubit que la última, se fusionan los ángulos; si no,
+    entra a la pila. Al cancelar un par, la siguiente compuerta se
+    compara con la que quedó debajo, en la misma pasada: es el
+    algoritmo clásico de reducción, así que una pasada encuentra
+    TODAS las cancelaciones (las que se vuelven adyacentes al
+    cancelar un par se ven sin repetir la pasada). Las líneas que
+    no son compuertas (REGISTER, APPEND_TO_REGISTER, comentarios,
+    vacías) y PUSH/POP pasan tal cual y vacían la pila a ``out``
+    (nada se cancela a través de ellas).
 
-    Con ``out`` (una lista o un objeto con append, p. ej. un
-    escritor a disco) las líneas limpias van ahí en vez de a una
-    lista nueva: así ``clean_file`` procesa en STREAMING y no
-    necesita cargar el circuito entero en memoria (el DQI tiene
-    64M de líneas y la versión en memoria se moría por OOM).
+    Devuelve las stats de la pasada.
     """
-    if out is None:
-        out = []
     stats = {"removed": 0, "zpow_fused": 0, "zpow_removed": 0,
              "pairs_cancelled": 0}
     depth = 0
-    # La última compuerta emitida (pendiente de combinar con la
-    # siguiente). Se guarda como (opcode, operandos, línea, depth).
-    pending: tuple[str, list[str], str, int] | None = None
+    # La pila de compuertas emitidas que aún pueden cancelarse.
+    # Cada elemento es (opcode, operandos, línea, depth).
+    stack: list[tuple[str, list[str], str, int]] = []
 
-    def flush() -> None:
-        nonlocal pending
-        if pending is not None:
-            out.append(pending[2])
-            pending = None
+    def flush_stack() -> None:
+        for _, _, line, _ in stack:
+            out.append(line)
+        stack.clear()
 
     for raw in lines:
         op, args = _split(raw)
         if op == "PUSH_CONDITION":
-            flush()
+            flush_stack()
             depth += 1
             out.append(raw)
             continue
         if op == "POP_CONDITION":
-            flush()
+            flush_stack()
             depth = max(0, depth - 1)
             out.append(raw)
             continue
         if not op or op in ("REGISTER", "APPEND_TO_REGISTER"):
-            flush()
+            flush_stack()
             out.append(raw)
             continue
-        # Una compuerta: ¿se combina con la pendiente?
-        if pending is not None and pending[3] == depth:
-            pop, pargs, pline, _ = pending
-            if op == "Z_POW" and pop == "Z_POW" and args and pargs \
-                    and args[0] == pargs[0]:
+        # Una compuerta: ¿se combina con la última de la pila?
+        if stack and stack[-1][3] == depth:
+            top_op, top_args, _, _ = stack[-1]
+            if op == "Z_POW" and top_op == "Z_POW" and args and top_args \
+                    and args[0] == top_args[0]:
                 # Fusionar: sumar ángulos en vueltas (mod 2), en
                 # Decimal EXACTO (los ángulos del .kmx son decimales
                 # de 60 dígitos; por float se pierde ~1e-16 y el S
@@ -105,12 +117,12 @@ def peephole_clean(lines, out=None) -> tuple[list[str] | None, dict]:
                 # redondea a 28 dígitos, por eso prec=100).
                 try:
                     with localcontext(Context(prec=100)):
-                        a = (Decimal(pargs[1]) + Decimal(args[1])) % 2
+                        a = (Decimal(top_args[1]) + Decimal(args[1])) % 2
                 except (IndexError, ValueError, ArithmeticError):
                     a = None
                 if a is not None:
                     if a == 0:
-                        pending = None
+                        stack.pop()
                         stats["removed"] += 2
                         stats["zpow_removed"] += 2
                     else:
@@ -119,19 +131,45 @@ def peephole_clean(lines, out=None) -> tuple[list[str] | None, dict]:
                         astr = format(a.normalize(), "f")
                         if "." not in astr:
                             astr += ".0"
-                        pending = ("Z_POW", [args[0], astr],
-                                   f"Z_POW {args[0]} {astr}", depth)
+                        stack[-1] = ("Z_POW", [args[0], astr],
+                                     f"Z_POW {args[0]} {astr}", depth)
                         stats["zpow_fused"] += 1
                     continue
-            if op == pop and op in SELF_INVERSE and args == pargs:
+            if op == top_op and op in SELF_INVERSE and args == top_args:
                 # Par idéntico autoinverso: se cancelan las dos.
-                pending = None
+                stack.pop()
                 stats["removed"] += 2
                 stats["pairs_cancelled"] += 1
                 continue
-        flush()
-        pending = (op, args, raw, depth)
-    flush()
+        stack.append((op, args, raw, depth))
+        # Acotar la pila: lo más viejo se confirma a la salida.
+        # (Una cancelación que necesitara más de max_pending
+        # compuertas intermedias se perdería, pero el resultado
+        # sigue siendo válido; en la semilla y el DQI las cadenas
+        # son mucho más cortas.)
+        if len(stack) > max_pending:
+            _, _, line, _ = stack.pop(0)
+            out.append(line)
+    flush_stack()
+    return stats
+
+
+def peephole_clean(lines, out=None) -> tuple[list[str] | None, dict]:
+    """Limpia un .kmx (lista de líneas) con la ruta Fast.
+
+    Devuelve (líneas_limpias, stats). Una sola pasada con pila
+    encuentra TODAS las cancelaciones (ver _peephole_pass), así
+    que el resultado es idempotente: una segunda pasada no quita
+    nada. Cada reescritura es exacta, así que la validez se
+    preserva y el S no cambia.
+
+    Con ``out`` (una lista o un objeto con append, p. ej. un
+    escritor a disco) las líneas limpias van ahí en vez de a una
+    lista nueva.
+    """
+    if out is None:
+        out = []
+    stats = _peephole_pass(lines, out)
     return out, stats
 
 
@@ -151,7 +189,12 @@ class _StreamingList(list):
 
 
 def clean_file(in_path: str | Path, out_path: str | Path) -> dict:
-    """Limpia un .kmx en disco, en streaming. Devuelve las stats."""
+    """Limpia un .kmx en disco, en streaming, en una sola pasada.
+
+    Devuelve las stats. Lee línea a línea y escribe al vuelo (la
+    pila interna está acotada, así que no se carga el circuito
+    entero: el DQI tiene 64M de líneas).
+    """
     in_path = Path(in_path)
     out_path = Path(out_path)
     with in_path.open(encoding="utf-8") as fin, \
