@@ -25,6 +25,57 @@ from auto_mvp.circuits.generators.build_hybrid_bm import (
 )
 
 
+def test_circuito_completo_sin_basura():
+    # El circuito completo (BM + omega + scan + BM atrás) debe
+    # restaurar S y dejar TODOS los ancilla en |0⟩. Antes de la
+    # corrección dejaba ~100-165 ancilla en 1 (OMG sin descomputar,
+    # tmpL/tmpL2 sin limpiar, ctrl1 en 1, Toom-3 rompiendo B/Lreg)
+    # y el verificador oficial lo rechazaba (eps+ = 1.0).
+    import numpy as np
+
+    from auto_mvp.circuits.generators.build_hybrid_bm import DEGREE
+
+    n, m, batch, nslot = 10, 15, 4, 6
+    circ, info = build_hybrid_bm_circuit(
+        n=n, m=m, batch=batch, nslot=nslot, toom3=True)
+    q = int(info["qubits"])
+    assert q == 1139
+    S_qubits = km.array([km.q(k) for k in range(n * DEGREE)])
+    E_bits = km.array([km.b(k) for k in range(m * DEGREE)])
+    ancilla = km.array([km.q(k) for k in range(n * DEGREE, q)])
+    rng = np.random.default_rng(12345)
+    nshots = 4
+    S_list = []
+    for _ in range(nshots):
+        w = int(rng.integers(1, max(2, n // 2)))
+        pos = rng.choice(m, size=w, replace=False)
+        err = {int(j): int(rng.integers(1, 1 << DEGREE)) for j in pos}
+        S_list.append(syndrome_from_errors_n(err, n))
+        for j in range(m):
+            pass
+    sim = km.Simulator(batch_size=nshots, debug_print=False,
+                       counting_operations=True, seed=1)
+    sim.use_same_registers_as(circ)
+    s_bits = np.zeros((n * DEGREE, nshots), dtype=bool)
+    for s in range(nshots):
+        for j in range(n):
+            for b in range(DEGREE):
+                s_bits[j * DEGREE + b, s] = bool((S_list[s][j] >> b) & 1)
+    sim.write_across_shots(S_qubits, s_bits)
+    # E en 0 (máscaras cero: la fase es 0, solo se comprueba valor).
+    sim.write_across_shots(
+        E_bits, np.zeros((m * DEGREE, nshots), dtype=bool))
+    sim.do(circ)
+    reg_diff = sim.read_across_shots(S_qubits) ^ s_bits
+    junk = sim.read_across_shots(ancilla)
+    assert not reg_diff.any(), "S no se restauró"
+    assert not junk.any(), "hay ancilla en 1"
+    # T dinámico = T estático (sin compuertas condicionales que
+    # cambien el conteo por shot).
+    assert sim.operation_statistics().num_toffoli_like / nshots == (
+        info["toffoli_like"])
+
+
 def test_verify_small_passes():
     res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=4)
     assert res["bm_sigma_correct"] == res["bm_sigma_total"] == 24
@@ -71,14 +122,16 @@ def test_small_full_build_counts():
 
 
 def test_toom3_lowest_T_same_Q():
-    # Toom-3 (45 T/mult) baja T vs el nativo (63 T/mult) sin subir Q.
+    # Toom-3 DESACTIVADO: rompe la restauración de B/Lreg en
+    # bm_backward (B queda con basura), así que toom3=True da el
+    # mismo circuito que el nativo (misma T y misma Q). Se guarda
+    # el knob en info pero no cambia el circuito.
     _, native = build_hybrid_bm_circuit(n=10, m=15, batch=4, nslot=6,
                                         toom3=False)
     _, toom3 = build_hybrid_bm_circuit(n=10, m=15, batch=4, nslot=6,
                                        toom3=True)
-    assert toom3["toffoli_like"] < native["toffoli_like"]
+    assert toom3["toffoli_like"] == native["toffoli_like"]
     assert toom3["qubits"] == native["qubits"]
-    assert toom3["toom3"] is True
 
 
 def test_verify_small_toom3_passes():

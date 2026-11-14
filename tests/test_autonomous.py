@@ -122,10 +122,10 @@ def test_autonomous_genera_semillas(tmp_path):
     assert fake.calls_code == 1
     # Todas válidas (el generador del repo + verify_small).
     assert all(s["valid"] for s in res["semillas"])
-    # La mejor es la de toom3 (T=22152 < T nativa=27264): el LLM
-    # propuso toom3 y la corrida lo guardó.
-    assert res["mejor"]["toom3"] is True
-    assert res["mejor"]["toffoli_like"] == 22152
+    # Toom-3 DESACTIVADO (rompe bm_backward): la mejor es la nativa
+    # (T=28587, toom3=False); el knob toom3 ya no baja T.
+    assert res["mejor"]["toom3"] is False
+    assert res["mejor"]["toffoli_like"] == 28587
     # La parametrización nueva se midió y se guardó.
     assert res["param_nueva"]["status"] == "medido"
     assert res["param_nueva"]["nslot"] == 7  # 10//2+2
@@ -136,7 +136,7 @@ def test_autonomous_genera_semillas(tmp_path):
     assert semillas["semillas"][1]["origen"] == "LLM local"
     veredicto = json.loads((tmp_path / "VEREDICTO.json").read_text())
     assert veredicto["n_semillas"] == 5
-    assert veredicto["mejor_semilla"]["toom3"] is True
+    assert veredicto["mejor_semilla"]["toom3"] is False
 
 
 def test_autonomous_sin_llm_sigue_con_defecto(tmp_path):

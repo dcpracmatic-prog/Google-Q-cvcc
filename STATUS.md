@@ -1,10 +1,22 @@
-# STATUS.md — estado del repo (v2.17.3)
+# STATUS.md — estado del repo (v2.17.4)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.17.4** (2026-11-14): pedido de Arturo ("soluciona y vuelve
+  a probar hasta que funcione"). El circuito híbrido ya no deja
+  basura en ancilla: OMG se descomputa, tmpL se limpia con iadd
+  (sin tmpL2), ctrl1 vuelve a 0, y Toom-3 queda desactivado (rompía
+  B/Lreg en bm_backward). Medido a n=10: ancilla en 1 por shot
+  165 → 0, S restaurado 8/8, errores de valor 0/8, T dinámico =
+  estático = 28,587 (nativo). Se quitó el K_j del scan (escalaba
+  el error de Forney y cambiaba la fase) y se arregló `gf_inv_new`
+  (no desempaquetaba el scaffold). Tests 24/24 (híbrido + LLM DQI
+  + autónomo + LLM v220). Pendiente: la fase sigue con 3 errores
+  de 8 (varía con la semilla del simulador; apunta al HMR del
+  scan). Detalle en `notes/v2.17.4.md`.
 - **v2.17.3** (2026-11-14): pedido de Arturo (la semilla
   encontrada no era transparente). El corredor DQI ya guarda la
   mejor semilla: `mejor_semilla.kmb` (el circuito real) +

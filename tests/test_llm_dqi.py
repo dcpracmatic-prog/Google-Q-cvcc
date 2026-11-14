@@ -50,11 +50,12 @@ def test_llm_dqi_mejora_con_toom3():
     assert res["llm_fallbacks"] == 0
     assert res["proposals"] == 2
     assert res["invalid"] == 0
-    # La base nativa (T=27264) es peor que el toom3 (T=22152):
-    # el LLM propuso toom3 y el corredor lo guardó.
-    assert res["best_knobs"]["toom3"] is True
-    assert res["best_knobs"]["toffoli_like"] == 22152
-    assert res["best_S"] < 1.1912605 * 1139 ** 2 * 27264
+    # Toom-3 DESACTIVADO (rompe bm_backward): toom3=True ya no baja
+    # T; la base nativa (T=28587) y la propuesta toom3 dan lo mismo,
+    # así que el corredor guarda la base (toom3=False).
+    assert res["best_knobs"]["toom3"] is False
+    assert res["best_knobs"]["toffoli_like"] == 28587
+    assert res["best_S"] == 1.1912605 * 1139 ** 2 * 28587
 
 
 def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
@@ -76,9 +77,9 @@ def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
     recipe = json.loads(recipe_p.read_text(encoding="utf-8"))
     # La receta trae todo lo necesario para reproducir y evaluar.
     assert recipe["batch"] == 4 and recipe["nslot"] == 6
-    assert recipe["toom3"] is True
+    assert recipe["toom3"] is False
     assert recipe["qubits"] == 1139
-    assert recipe["toffoli_like"] == 22152
+    assert recipe["toffoli_like"] == 28587
     assert abs(recipe["S"] - res["best_S"]) < 1e-6
     assert recipe["verify"] == {"bm_sigma": "24/24", "scan": "12/12"}
     # El SHA256 de la receta es el del .kmb guardado.
@@ -101,7 +102,7 @@ def test_reproducir_semilla_coincide(tmp_path):
     assert out["coincide"] is True
     assert out["sha256"] == res["semilla"]["kmb_sha256"]
     assert out["qubits"] == 1139
-    assert out["toffoli_like"] == 22152
+    assert out["toffoli_like"] == 28587
     def no_key(prompt):
         raise LLMError("sin llave", no_key=True)
 

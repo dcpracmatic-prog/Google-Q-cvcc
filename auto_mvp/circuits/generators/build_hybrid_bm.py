@@ -286,12 +286,14 @@ def set_toom3(on: bool) -> None:
 
 
 def _ixor_mul(bld, x, y, target):
-    """target ^= x * y: Toom-3 (45 T) si está activo, nativo (63 T) si no."""
-    if _TOOM3:
-        from auto_mvp.circuits.generators.toom3 import emit_ixor_toom3
-        emit_ixor_toom3(bld, x, y, target)
-    else:
-        bld.ixor_gf2_mul(x, y, target=target, field=FIELD)
+    """target ^= x * y. Usa SIEMPRE el multiplicador nativo (63 T/mult).
+
+    El Toom-3 vendoreado (45 T/mult) ROMPE la restauración de B/Lreg
+    en ``bm_backward`` (B queda con 27 qubits en 1 a n=10, Lreg con
+    3; con el nativo quedan en 0), así que está desactivado hasta
+    que se arregle. El flag ``_TOOM3`` se ignora por ahora.
+    """
+    bld.ixor_gf2_mul(x, y, target=target, field=FIELD)
 
 
 def gf_mul_new(bld, x, y):
@@ -308,7 +310,8 @@ def gf_inv_new(bld, x):
     con ``gf_inv_del`` cuando ya no necesite el inverso.
     """
     out = bld.alloc_qubits(DEGREE)
-    scaf = bld.init_gf2_inverse_with_scaffold(x, target=out, field=FIELD)
+    _, scaf = bld.init_gf2_inverse_with_scaffold(x, target=out,
+                                                field=FIELD)
     return out, scaf
 
 
@@ -534,6 +537,20 @@ def compute_omega(bld, C, S, n, nslot=36):
     return OMG
 
 
+def uncompute_omega(bld, C, S, OMG, n, nslot=36):
+    """Descomputa ``compute_omega`` (0 T extra en conteo neto: XOR es
+    su propia inversa). Reaplica los mismos productos para devolver
+    OMG a |0> y lo libera. Sin esto, OMG queda con los valores de
+    omega y es basura para el verificador (otros qubits deben ser 0).
+    """
+    for k in range(nslot):
+        for i in range(min(k, nslot - 1) + 1):
+            if k - i < n:
+                _ixor_mul(bld, C[i], S[k - i], OMG[k])
+    for reg in OMG:
+        bld.free(km.array(list(reg)))
+
+
 # ------------------------------------------------------------------
 # Hybrid scan: evaluación Chien + Forney por lotes de Montgomery
 # ------------------------------------------------------------------
@@ -564,24 +581,25 @@ def uneval_sigma_prime(bld, C, L, x, a_reg, is_zero, zero_reg):
 
 
 def eval_sigma_omega(bld, C, OMG, L, x, kj):
-    """Evalúa sigma(x) y omega(x)*K_j con Horner.
+    """Evalúa sigma(x) y omega(x) con Horner.
 
-    Devuelve (s_acc, o_acc). `kj` = alfa^{j*(m-2)} es la constante
-    clásica de la convención del Forney de referencia (K_j); se aplica
-    con gf2_imul (0 T). Es el ``eval_sigma_omega`` de montgomery_v4.
+    Devuelve (s_acc, o_acc). `kj` se IGNORA (se recibe por
+    compatibilidad con la llamada): la constante K_j =
+    alfa^{j*(m-2)} de montgomery_v4 ESCALA el error de Forney
+    (e_j -> K_j * e_j) y cambia la fase (-1)^popcount(e_j & M_j),
+    así que la fase salía mal (1 error en j=1 con M=1 daba False
+    en vez de True; alpha^13 tiene LSB 0). El Forney clásico
+    (forney_errors, sin K_j) da el error verdadero, así que aquí
+    NO se aplica K_j. Sin K_j la fase coincide con la esperada.
     """
     s_acc = horner_eval(bld, list(C[: L + 1]), x)
     o_acc = horner_eval(bld, list(OMG[:L]), x)
-    if kj != 1:
-        bld.gf2_imul(kj, target=o_acc, field=FIELD)
     return s_acc, o_acc
 
 
 def uneval_sigma_omega(bld, C, OMG, L, x, kj, s_acc, o_acc):
-    """Descomputa ``eval_sigma_omega`` (0 T). La multiplicación por
-    K_j se deshace multiplicando por 1/K_j (constante clásica)."""
-    if kj != 1:
-        bld.gf2_imul(gf_inv(kj), target=o_acc, field=FIELD)
+    """Descomputa ``eval_sigma_omega`` (0 T). `kj` se ignora igual
+    que en ``eval_sigma_omega`` (ya no se aplica K_j)."""
     horner_uneval(bld, list(OMG[:L]), x, o_acc)
     horner_uneval(bld, list(C[: L + 1]), x, s_acc)
 
@@ -589,7 +607,7 @@ def uneval_sigma_omega(bld, C, OMG, L, x, kj, s_acc, o_acc):
 def phase_kick(bld, s_acc, o_acc, inv_reg, mask_reg):
     """Patea la fase de Forney de una posición. Devuelve (is_root, located).
 
-    is_root = (sigma(x) == 0). located = is_root ? omega(x)*K_j : 0.
+    is_root = (sigma(x) == 0). located = is_root ? omega(x) : 0.
     La fase (-1)^popcount(e_j & M_j) se aplica con
     ``gf2_phase_by_product(located, inv, mask)`` donde inv = 1/sigma'(x)
     y mask = M_j (clásico). Es el ``phase_kick`` modo flip36 de
@@ -787,14 +805,24 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
                 bld.cswap(ctrl1, B[i][k], B[i + 1][k])
         for k in range(DEGREE):
             bld.cswap(ctrl1, B[NSLOT - 1][k], trash[k])
-        # f. deshacer L (misma operación: L <- r+1-L si flag)
-        tmpL2 = bld.alloc_qubits(LBITS)
+        # ctrl1 se puso a 1 con X en el adelante; se devuelve a 0
+        # con X otra vez (es su propia inversa). Si no, queda en 1
+        # y es basura para el verificador.
+        bld.x(km.array([ctrl1]))
+        # f. deshacer L y descomputar tmpL (sin tmpL2).
+        #    Antes de este paso: Lreg = (r+1)-L0 (si flag) o L0
+        #    (si no), tmpL = L0 (si flag) o (r+1)-L0 (si no).
+        #    (1) cswap(flag, Lreg, tmpL): restaura Lreg a L0 y deja
+        #    tmpL = (r+1)-L0 en AMBOS casos. (2) iadd(Lreg, tmpL):
+        #    tmpL = (r+1). (3) X en los bits de (r+1): tmpL = 0.
+        #    Sin esto, tmpL quedaba con basura y tmpL2 también (el
+        #    mecanismo viejo con tmpL2 dejaba ambos en 1).
+        for k in range(LBITS):
+            bld.cswap(flag[0], Lreg[k], tmpL[k])
+        bld.iadd(Lreg, target=tmpL)
         for k in range(LBITS):
             if (r + 1) >> k & 1:
-                bld.x(km.array([tmpL2[k]]))
-        bld.isub(Lreg, target=tmpL2)
-        for k in range(LBITS):
-            bld.cswap(flag[0], Lreg[k], tmpL2[k])
+                bld.x(km.array([tmpL[k]]))
         # e. deshacer update (con hist_mult, no el mult de trabajo) y
         #    swap C<->B. hist_mult se libera tras usarlo.
         for i in range(NSLOT):
@@ -826,7 +854,6 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
         bld.free(alpha_reg)
         bld.free(flag)
         bld.free(tmpL)
-        bld.free(tmpL2)
         bld.free(trash)
         bld.free(km.array([ctrl1]))
         bld.free(km.array([is_d_nonzero]))
@@ -851,17 +878,24 @@ def build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,
     Knobs que mueve el LLM estratega (deltas DQI):
       batch: tamaño del lote Montgomery (T).
       nslot: slots C/B (Q; debe ser >= Lmax+1).
-      toom3: True usa el multiplicador Toom-3 vendoreado (45 T/mult)
-        en vez del nativo (63 T/mult); False usa el nativo.
+      toom3: RESERVADO (sin efecto por ahora). El multiplicador
+        Toom-3 vendoreado (45 T/mult) ROMPE la restauración de
+        B/Lreg en ``bm_backward`` (B queda con 27 qubits en 1 a
+        n=10, Lreg con 3; con el nativo quedan en 0), así que el
+        generador usa siempre el nativo (63 T/mult) hasta que
+        Toom-3 se arregle. El knob se guarda en info pero no
+        cambia el circuito. Un circuito válido con T mayor vale
+        más que uno inválido con T menor.
 
     Fases:
       1. BM adelante -> sigma C (y B, L, hist).
       2. Omega = sigma * S mod z^n.
       3. Hybrid scan (lotes Montgomery) -> fase DQI.
-      4. BM atrás -> restaura S, libera C/B.
+      4. Descomputar omega -> OMG a |0>.
+      5. BM atrás -> restaura S, libera C/B.
     Devuelve (circ, info) donde info trae Q, T y los registros.
     """
-    set_toom3(bool(toom3))
+    set_toom3(False)
     try:
         return _build_hybrid_bm_circuit(n, degree, m, batch, nslot)
     finally:
@@ -879,6 +913,8 @@ def _build_hybrid_bm_circuit(n, degree, m, batch, nslot):
     OMG = compute_omega(bld, C, S, n, nslot=nslot)
     L = nslot - 1
     scan_info = hybrid_scan(bld, C, OMG, E, m, batch, L, zero_reg)
+    # Descomputar omega: OMG vuelve a |0> (si no, es basura).
+    uncompute_omega(bld, C, S, OMG, n, nslot=nslot)
     bm_backward(bld, S, C, B, Lreg, hist, n, nslot=nslot)
     bld.free(zero_reg)
     circ = bld.finish_circuit()
