@@ -5,42 +5,26 @@ verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
-- **v2.17.1** (2026-11-14): corrección del bug que tumbó el
-  Notebook v2 en Kaggle (error a los ~8 min, sin mensaje). Causa:
-  `auto_mvp/autonomous.py` importaba `build_hybrid_bm` al cargarse
-  y ese módulo crea `km.GF2Field(...)` al importarse; en Kaggle
-  `import kickmix` trae un paquete VACÍO (sin GF2Field) hasta que
-  `setup_kaggle()` lo arregla, así que el `from auto_mvp.autonomous
-  import ...` del Notebook fallaba con AttributeError antes de
-  bajar el GGUF. Ahora `autonomous.py` importa `llm_auto_dqi` /
-  `build_hybrid_bm` perezoso DENTRO de `run_autonomous` (después de
-  `setup_kaggle`), e importar el módulo es seguro sin kickmix
-  (test de regresión en subproceso con kickmix vacío). Además
-  `setup_kaggle` ya no exige encontrar la competencia: si no está
-  montada, salta el .so y va directo a pip install kickmix (generar
-  semillas no necesita el dataset). Tests 6/6
-  (`tests/test_autonomous.py`). Detalle en `notes/v2.17.1.md`.
-- **v2.17.0** (2026-11-14): pedido de Arturo (el Notebook solo un
-  código de ejecución delgado; la lógica vive en el repo). Nuevo
-  `auto_mvp/autonomous.py`: generación AUTÓNOMA de semillas de
-  circuitos desde el repositorio. `LocalLLM` (Qwen2.5-Coder-1.5B-
-  Instruct local, GGUF Q4_K_M, llama-cpp-python, temp 0.7, sin
-  Gemini/Groq; `llama_cpp` se importa perezoso), `validate_code`
-  (guarda de imports: solo math/typing/auto_mvp/kickmix),
-  `setup_kaggle` (encuentra la competencia y deja kickmix con
-  Circuit) y `run_autonomous` (sin base, sin baseline, sin
-  puntuación máxima: la primera semilla se genera y se mide, cada
-  semilla nueva —parametrización propuesta por el LLM— solo trata
-  de hacerlo mejor que la mejor hasta ahora; al final el LLM
-  propone una parametrización nueva `novel_nslot` chica y se mide
-  una semilla con ella). Guarda `semillas.json` (las semillas +
-  sus parametrizaciones), `param_nueva.json` y `VEREDICTO.json`.
-  Sin modelo, sigue con los knobs por defecto. Probado en sandbox
-  con cliente falso (5 semillas a escala chica, mejor toom3
-  T=22,152 S=3.42e10; novel_nslot n=7 medido; código roto no
-  aborta). Tests 5/5 (`tests/test_autonomous.py`). El Notebook de
-  Kaggle ahora es delgado (2 celdas de código: instalar + ejecutar
-  `run_autonomous`). Detalle en `notes/v2.17.0.md`.
+- **v2.17.1** (2026-11-14): corrección del import de autonomous
+  (ya no necesita kickmix al cargarse: los imports de
+  build_hybrid_bm y llm_auto_dqi son perezosos; el bug tumbó el
+  Notebook v2 en Kaggle) + restauración de `autonomous.py` y
+  `test_autonomous.py`, que un push paralelo (v2.17.0, el LLM
+  local) había borrado de main por error. La v2.17.0 ya trae
+  ambas cosas: la generación autónoma de semillas y el LLM local.
+  Detalle en `notes/v2.17.1.md` y `notes/v2.17.0.md`.
+- **v2.17.0** (2026-11-14): dos pedidos de Arturo. (a) Generación
+  autónoma de semillas desde el repo (`auto_mvp/autonomous.py`:
+  LocalLLM + validate_code + setup_kaggle + run_autonomous;
+  el Notebook solo instala y ejecuta). (b) El LLM ya es local:
+  `auto_mvp/llm.py` reescrito a Qwen2.5-Coder-1.5B-Instruct,
+  GGUF Q4_K_M, llama-cpp-python, temp 0.7, SIN API ni llave.
+  El GGUF (~1 GB) no va en el repo: se baja de HuggingFace la
+  primera vez (SHA256 verificado) o se pone en `LLM_MODEL_PATH`.
+  Verificado con el modelo real en sandbox (sin llave):
+  `complete_json` devuelve deltas válidos; el corredor DQI hizo
+  2 llamadas, 0 fallbacks, 6 propuestas válidas. Tests 11/11
+  (llm) y 6/6 (autonomous). Detalle en `notes/v2.17.0.md`.
 - **v2.16.0** (2026-11-14): pedido de Arturo (que el LLM optimice
   durante la ejecución). Nuevo `auto_mvp/llm_auto_dqi.py`: el
   estratega propone deltas DQI (batch, nslot, toom3) como JSON, el
