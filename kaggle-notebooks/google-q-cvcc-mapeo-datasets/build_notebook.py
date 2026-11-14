@@ -63,7 +63,7 @@ def code_cell(src):
 
 
 # ------------------------------------------------------------------
-# Celda 1: el repo vendido (snapshot v2.13.0)
+# Celda 1: el repo vendido (snapshot v2.14.0)
 # ------------------------------------------------------------------
 def cell_repo(b64_chunks: list[str], n_files: int) -> dict:
     return code_cell(
@@ -81,7 +81,7 @@ def cell_repo(b64_chunks: list[str], n_files: int) -> dict:
         "print('archivos:', len(files))\n"
         f"if len(files) != {n_files}: print(f'AVISO: se esperaban {n_files} archivos, hay {{len(files)}}')\n"
         "if not ('auto_mvp/benchmark.py' in files and 'auto_mvp/causal.py' in files): print('AVISO: faltan modulos del repo (benchmark/causal)')\n"
-        "print('repo OK: v2.12.0 con benchmark (5 operadores) + rol causal')\n")
+        "print('repo OK: v2.14.0 con benchmark (5 operadores, delta_t) + rol causal')\n")
 
 
 CELL_RELOJ = r'''
