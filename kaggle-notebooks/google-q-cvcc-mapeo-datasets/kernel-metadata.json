@@ -1,0 +1,19 @@
+{
+  "id": "dcpracmatic/google-q-cvcc-mapeo-de-datasets-y-llm-en-cpu",
+  "id_no": 144924185,
+  "title": "Google-Q-cvcc: mapeo de datasets y LLM en CPU",
+  "code_file": "google-q-cvcc-mapeo-datasets.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_tpu": false,
+  "enable_internet": true,
+  "dataset_sources": [
+    "dcpracmatic/qualtran"
+  ],
+  "competition_sources": [
+    "google-verifiable-quantum-circuit-compilation"
+  ],
+  "keywords": []
+}

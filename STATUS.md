@@ -1,10 +1,25 @@
-# STATUS.md — estado del repo (v2.12.0)
+# STATUS.md — estado del repo (v2.13.0)
 
-Última actualización: 2026-11-13. Todo lo que dice aquí está
+Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.13.0** (2026-11-14): pedido de Arturo (subir el Notebook de
+  mapeo a GitHub y corregir lo de rotation_merge). Dos piezas:
+  - **Salto de línea heredado** (`rotation_merge.py`, `peephole.py`):
+    las Z_POW re-emitidas en memoria llevaban el salto de línea de
+    la entrada; sin él se pegaban a la siguiente línea y el `.kmx`
+    ya no cargaba ("Invalid decimal angle"). Hallazgo del Notebook
+    de mapeo en Kaggle v15/seed2. El `commuting` no tenía el defecto.
+    Sin saltos en la entrada, la salida es idéntica a v2.12.0.
+    Ver `notes/v2.13.0.md` y `tests/test_tool_v2130.py` (3 tests).
+  - **Notebook de mapeo en el repo** (`kaggle-notebooks/`): el
+    constructor, el Notebook y los scripts de Kaggle. Medido en
+    Kaggle v16 (4,9 min): invsqrt S = 2.068.518,26 Q = 260 válido;
+    DQI fast_verify 2048 válido S = 154.025.541.234.591,47; DFTHC
+    oficial PASS score = 3.355.599.588,32 (el publicado); LLM Qwen
+    1.5B en CPU, 3 semillas.
 - **v2.12.0** (2026-11-13): pedido de Arturo (análisis del script
   de evidencia A y causas latentes, integrado a la herramienta).
   Una pieza:

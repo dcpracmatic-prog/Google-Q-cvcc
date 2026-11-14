@@ -71,6 +71,20 @@ def rotation_merge(lines, out=None) -> tuple[list[str] | None, dict]:
     if out is None:
         out = []
     stats = {"merged": 0, "removed": 0, "zpow_in": 0, "zpow_out": 0}
+    # El salto de línea se hereda de la entrada: si las líneas traen
+    # "\n" (splitlines(keepends=True), el uso en memoria), las Z_POW
+    # re-emitidas también lo llevan, para que ''.join() de la salida
+    # sea un .kmx válido. Si la entrada no trae "\n" (juguetes,
+    # streaming con líneas ya peladas), no se agrega nada y el
+    # contrato actual no cambia. Sin esto, una Z_POW re-emitida se
+    # pegaba a la siguiente línea y el .kmx ya no cargaba
+    # ("Invalid decimal angle") — hallazgo del Notebook de mapeo
+    # en Kaggle v15/seed2 (2026-11-13). El peephole tenía el mismo
+    # defecto en su fusión y se corrige igual.
+    if isinstance(lines, (list, tuple)):
+        nl = "\n" if any(l.endswith("\n") for l in lines) else ""
+    else:
+        nl = ""
     # Las pendientes son Decimal EXACTO, no float: los ángulos del
     # .kmx son decimales de 60 dígitos (aritmética racional exacta) y
     # pasarlos por float pierde ~1e-16 por ángulo, lo que movía el S
@@ -91,7 +105,7 @@ def rotation_merge(lines, out=None) -> tuple[list[str] | None, dict]:
             astr = format(angle.normalize(), "f")
             if "." not in astr:
                 astr += ".0"
-            out.append(f"Z_POW {q} {astr}")
+            out.append(f"Z_POW {q} {astr}" + nl)
             stats["zpow_out"] += 1
 
     def flush_all() -> None:

@@ -78,6 +78,15 @@ def _peephole_pass(lines, out, max_pending: int = 4096) -> dict:
     """
     stats = {"removed": 0, "zpow_fused": 0, "zpow_removed": 0,
              "pairs_cancelled": 0}
+    # El salto de línea se hereda de la entrada (igual que en
+    # rotation_merge v2.13.0): si las líneas traen "\n", la Z_POW
+    # fusionada también lo lleva, para que ''.join() de la salida
+    # sea un .kmx válido. Sin esto, la línea fusionada se pegaba
+    # a la siguiente y el .kmx ya no cargaba.
+    if isinstance(lines, (list, tuple)):
+        nl = "\n" if any(l.endswith("\n") for l in lines) else ""
+    else:
+        nl = ""
     depth = 0
     # La pila de compuertas emitidas que aún pueden cancelarse.
     # Cada elemento es (opcode, operandos, línea, depth).
@@ -132,7 +141,7 @@ def _peephole_pass(lines, out, max_pending: int = 4096) -> dict:
                         if "." not in astr:
                             astr += ".0"
                         stack[-1] = ("Z_POW", [args[0], astr],
-                                     f"Z_POW {args[0]} {astr}", depth)
+                                     f"Z_POW {args[0]} {astr}" + nl, depth)
                         stats["zpow_fused"] += 1
                     continue
             if op == top_op and op in SELF_INVERSE and args == top_args:
