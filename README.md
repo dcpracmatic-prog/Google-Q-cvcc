@@ -1,6 +1,6 @@
 # AUTO_MVP — auto-optimizador para VQCC
 
-**Versión 2.11.0.** Fuerza bruta sobre CIRCUITOS para la competencia
+**Versión 2.12.0.** Fuerza bruta sobre CIRCUITOS para la competencia
 Google Quantum AI — Verifiable Quantum Circuit Compilation (VQCC).
 DIRECTIVA v2.0 de Arturo (2026-11-11 23:47 CST): el motor propone
 circuitos VÁLIDOS (que se pueda construir algo con ellos), los mide
@@ -48,16 +48,21 @@ tras el peephole, 164 en total; en el DQI 235.386 más, 352.078 en
 total, Toffoli intacto). La v2.11 mete: MAX_GAP 256 en la
 conmutación (en la semilla satura ahí: 76 más tras el peephole, 198
 en total) y la conmutación integrada al BENCHMARK como quinto
-operador.
+operador. La v2.12 mete: el ROL CAUSAL de cada operador
+(`auto_mvp/causal.py`, pedido de Arturo: el clasificador del script
+de evidencia A y causas latentes, aplicado a los datos medidos del
+benchmark — peephole y conmutación son indicadores, el resto
+indeterminado, y la acción mínima para mejorar el S es ninguna).
 
 > **Repo privado mientras la competencia esté abierta.**
 
-## Qué hace (v2.11: el modelo propone un lote, el prefilter ordena,
+## Qué hace (v2.12: el modelo propone un lote, el prefilter ordena,
 el peephole con pila limpia, la conmutación (GAP 256) cancela pares
 separados por compuertas que conmutan, la fusión de rotaciones es
 optativa, el detector de fan-out mide dónde se podría colapsar un
 AND, el benchmark compara los cinco operadores en el mismo circuito,
-y cada corrida deja su reporte y su benchmark en `notes/`)
+el clasificador causal dice qué operador es causa y cuál es solo
+indicador, y cada corrida deja su reporte y su benchmark en `notes/`)
 
 - **Corredor con modelo + prefilter
   (`python -m auto_mvp.llm_auto --target-S 90000`):** el modelo de

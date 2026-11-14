@@ -1,10 +1,22 @@
-# STATUS.md — estado del repo (v2.11.0)
+# STATUS.md — estado del repo (v2.12.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.12.0** (2026-11-13): pedido de Arturo (análisis del script
+  de evidencia A y causas latentes, integrado a la herramienta).
+  Una pieza:
+  - **ROL CAUSAL** (`auto_mvp/causal.py`): el clasificador del
+    script (correlación no es causa; solo la intervención
+    distingue), aplicado a los datos MEDIDOS del benchmark. Medido
+    en la semilla: peephole y commuting son indicadores (quitan
+    Clifford, no mueven S ni Toffolis), rotation_merge, fan-out y
+    SA son indeterminados, y la acción mínima para cualquier
+    ganancia positiva de S es None. Los 3 mundos sintéticos del
+    script son el test de ground truth del clasificador.
+    Ver `notes/v2.12.0.md`.
 - **v2.11.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
   (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 5/5,
   ÚLTIMA). Dos piezas:
