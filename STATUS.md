@@ -1,10 +1,22 @@
-# STATUS.md — estado del repo (v2.9.0)
+# STATUS.md — estado del repo (v2.10.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.10.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
+  (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 4/5).
+  Una pieza:
+  - **PEEPHOLE CON CONMUTACIÓN**
+    (`auto_mvp/circuits/operators/commuting.py`, streaming, una
+    pasada, búsqueda acotada a 16 compuertas): cancela pares
+    idénticos separados por compuertas en qubits disjuntos.
+    Medido: semilla 42 más tras el peephole (164 en total, S
+    idéntico, válido, idempotente); DQI 235.386 más (352.078 en
+    total, 3× lo del peephole, Toffoli 453.312 intacto,
+    instrucciones 64.168.150 → 63.816.072, 2ª pasada 0).
+    Ver `notes/v2.10.0.md`.
 - **v2.9.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
   (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 3/5).
   Una pieza:
