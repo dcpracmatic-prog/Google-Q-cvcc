@@ -57,7 +57,51 @@ def test_llm_dqi_mejora_con_toom3():
     assert res["best_S"] < 1.1912605 * 1139 ** 2 * 27264
 
 
-def test_llm_dqi_sin_llave_sigue_con_defecto():
+def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
+    # La semilla encontrada debe ser transparente: el circuito real
+    # (.kmb) + la receta (JSON con knobs, Q/T/S y SHA256), para
+    # reproducirla y evaluarla sin re-correr el LLM.
+    import hashlib
+    import json
+
+    res = run_llm_auto_dqi(
+        target_S=1e9, n=10, m=15, max_proposals=2,
+        llm_client=_fake_llm_toom3, batch_size=2, verify=True,
+        base_batch=4, base_nslot=6, base_toom3=False,
+        output_dir=tmp_path)
+    kmb = tmp_path / "mejor_semilla.kmb"
+    recipe_p = tmp_path / "mejor_semilla.json"
+    assert kmb.is_file() and kmb.stat().st_size > 0
+    assert recipe_p.is_file()
+    recipe = json.loads(recipe_p.read_text(encoding="utf-8"))
+    # La receta trae todo lo necesario para reproducir y evaluar.
+    assert recipe["batch"] == 4 and recipe["nslot"] == 6
+    assert recipe["toom3"] is True
+    assert recipe["qubits"] == 1139
+    assert recipe["toffoli_like"] == 22152
+    assert abs(recipe["S"] - res["best_S"]) < 1e-6
+    assert recipe["verify"] == {"bm_sigma": "24/24", "scan": "12/12"}
+    # El SHA256 de la receta es el del .kmb guardado.
+    assert (hashlib.sha256(kmb.read_bytes()).hexdigest()
+            == recipe["kmb_sha256"])
+    assert res["semilla"]["kmb_sha256"] == recipe["kmb_sha256"]
+
+
+def test_reproducir_semilla_coincide(tmp_path):
+    # Reconstruir con la receta da el mismo circuito (mismo SHA256):
+    # la semilla es reproducible.
+    from auto_mvp.llm_auto_dqi import reproducir_semilla
+
+    res = run_llm_auto_dqi(
+        target_S=1e9, n=10, m=15, max_proposals=2,
+        llm_client=_fake_llm_toom3, batch_size=2, verify=True,
+        base_batch=4, base_nslot=6, base_toom3=False,
+        output_dir=tmp_path)
+    out = reproducir_semilla(tmp_path / "mejor_semilla.json")
+    assert out["coincide"] is True
+    assert out["sha256"] == res["semilla"]["kmb_sha256"]
+    assert out["qubits"] == 1139
+    assert out["toffoli_like"] == 22152
     def no_key(prompt):
         raise LLMError("sin llave", no_key=True)
 

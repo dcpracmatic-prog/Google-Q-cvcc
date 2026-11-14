@@ -1,10 +1,18 @@
-# STATUS.md — estado del repo (v2.17.2)
+# STATUS.md — estado del repo (v2.17.3)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.17.3** (2026-11-14): pedido de Arturo (la semilla
+  encontrada no era transparente). El corredor DQI ya guarda la
+  mejor semilla: `mejor_semilla.kmb` (el circuito real) +
+  `mejor_semilla.json` (la receta: versión y commit, knobs,
+  Q/T/S, verificación y SHA256 del .kmb). `reproducir_semilla`
+  reconstruye desde la receta y comprueba el SHA256 (en sandbox
+  coincide: Q=1,139, T=22,152). Tests 6/6 en test_llm_dqi.
+  Detalle en `notes/v2.17.3.md`.
 - **v2.17.2** (2026-11-14): robustez de `run_autonomous` tras el
   error del Notebook v3 en Kaggle (el log llegó hasta "ejecutando
   run_autonomous" y ahí se cortó, sin semillas). La medición de

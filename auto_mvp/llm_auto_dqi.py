@@ -22,15 +22,20 @@ Cómo funciona (igual que invsqrt, pero con el generador híbrido):
    mide Q/T (conteo estático) y S proyectado = R * Q^2 * T
    (R = 1.1912605, medido en el DQI de referencia a 102,400 shots).
    Solo el mejor (menor S) sobrevive.
-3. **La semilla es la receta.** Cada mejora guarda sus knobs
-   (batch, nslot, toom3) + Q/T/S: re-correr el generador con los
+3. **La semilla es la receta Y el archivo.** Cada mejora guarda sus
+   knobs (batch, nslot, toom3) + Q/T/S, y al final el corredor
+   guarda la mejor semilla como archivo: `mejor_semilla.kmb`
+   (el circuito real, formato binario) + `mejor_semilla.json`
+   (la receta completa: versión y commit del repo, knobs, Q/T/S,
+   verificación y SHA256 del .kmb). Re-correr el generador con los
    mismos knobs reproduce el circuito (el generador es
-   determinista). No se guarda ningún .kmb/.kmx.
-4. **Sin llave, no se para.** Si no hay llave del modelo, si el
-   proveedor limita (429) o si el modelo devuelve un JSON malo, el
-   corredor sigue con deltas por defecto (batch/nslot rotando,
-   toom3 alternando). La corrida nunca depende del modelo; el
-   modelo solo la guía.
+   determinista); `reproducir_semilla` lo comprueba comparando el
+   SHA256. Sin el .kmb y la receta, la semilla no es transparente:
+   no se puede reproducir ni evaluar. Por eso se guarda.
+4. **Sin llave, no se para.** Si no hay modelo, si el modelo
+   devuelve un JSON malo, el corredor sigue con deltas por defecto
+   (batch/nslot rotando, toom3 alternando). La corrida nunca depende
+   del modelo; el modelo solo la guía.
 
 Uso::
 
@@ -53,13 +58,16 @@ Los knobs que mueve el LLM (deltas DQI):
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import math
+import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any, Callable
 
+from . import __version__
 from .circuits.generators.build_hybrid_bm import (
     build_hybrid_bm_circuit, verify_small)
 from .llm import LLMError, complete_json
@@ -195,6 +203,103 @@ def _measure_knobs(n: int, m: int, batch: int, nslot: int, toom3: bool,
     return entry
 
 
+def _repo_commit() -> str | None:
+    """El commit del repo (si es un clon git); None si no se puede."""
+    try:
+        repo = Path(__file__).resolve().parent.parent
+        r = subprocess.run(["git", "-C", str(repo), "rev-parse", "HEAD"],
+                           capture_output=True, text=True, timeout=30)
+        sha = r.stdout.strip()
+        return sha if r.returncode == 0 and sha else None
+    except Exception:
+        return None
+
+
+def save_best_seed(n: int, m: int, best: dict[str, Any],
+                   output_dir: str | Path) -> dict[str, Any]:
+    """Guarda la mejor semilla como archivo, para reproducir y evaluar.
+
+    Reconstruye el circuito con los knobs de `best` (el generador es
+    determinista: los mismos knobs dan el mismo circuito) y escribe:
+      - `mejor_semilla.kmb`: el circuito real (formato binario kickmix).
+      - `mejor_semilla.json`: la receta completa (versión y commit del
+        repo, knobs, Q/T/S, verificación y SHA256 del .kmb).
+
+    Devuelve la receta (el contenido de mejor_semilla.json). Sin el
+    .kmb y la receta, la semilla no es transparente: no se puede
+    reproducir ni evaluar. Por eso se guarda.
+    """
+    out = Path(output_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    circ, info = build_hybrid_bm_circuit(
+        n=n, m=m, batch=int(best["batch"]), nslot=int(best["nslot"]),
+        toom3=bool(best["toom3"]))
+    kmb = out / "mejor_semilla.kmb"
+    circ.to_file(str(kmb), format="kmb")
+    sha = hashlib.sha256(kmb.read_bytes()).hexdigest()
+    recipe: dict[str, Any] = {
+        "repo_version": __version__,
+        "repo_commit": _repo_commit(),
+        "generador": "auto_mvp.circuits.generators.build_hybrid_bm.build_hybrid_bm_circuit",
+        "n": int(n), "m": int(m),
+        "batch": int(best["batch"]), "nslot": int(best["nslot"]),
+        "toom3": bool(best["toom3"]),
+        "qubits": int(info["qubits"]),
+        "toffoli_like": int(info["toffoli_like"]),
+        "instructions": int(info["instructions"]),
+        "S": float(best["S"]),
+        "verify": best.get("verify"),
+        "kmb": "mejor_semilla.kmb",
+        "kmb_sha256": sha,
+        "reproducir": ("python -m auto_mvp.llm_auto_dqi --reproducir "
+                       "mejor_semilla.json"),
+    }
+    (out / "mejor_semilla.json").write_text(
+        json.dumps(recipe, ensure_ascii=False, indent=2),
+        encoding="utf-8")
+    return recipe
+
+
+def reproducir_semilla(recipe_path: str | Path,
+                       output_dir: str | Path | None = None
+                       ) -> dict[str, Any]:
+    """Reconstruye una semilla desde su receta y comprueba que es la misma.
+
+    Lee `mejor_semilla.json`, reconstruye el circuito con los knobs
+    guardados y compara el SHA256 con el del .kmb guardado. Devuelve
+    {coincide, sha256, esperado, ...}. Si `output_dir` se da, escribe
+    el circuito reconstruido como `mejor_semilla_reconstruida.kmb`.
+    Levanta ValueError si la receta no trae los knobs.
+    """
+    recipe = json.loads(Path(recipe_path).read_text(encoding="utf-8"))
+    for k in ("n", "m", "batch", "nslot", "toom3", "kmb_sha256"):
+        if k not in recipe:
+            raise ValueError(f"la receta no trae {k!r}")
+    circ, info = build_hybrid_bm_circuit(
+        n=int(recipe["n"]), m=int(recipe["m"]),
+        batch=int(recipe["batch"]), nslot=int(recipe["nslot"]),
+        toom3=bool(recipe["toom3"]))
+    if output_dir is not None:
+        out = Path(output_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        circ.to_file(str(out / "mejor_semilla_reconstruida.kmb"),
+                     format="kmb")
+    # El SHA256 del circuito reconstruido: se escribe a un temporal
+    # y se hashea (to_file es el mismo camino que save_best_seed).
+    tmp = Path(recipe_path).resolve().parent / ".reproducir_tmp.kmb"
+    circ.to_file(str(tmp), format="kmb")
+    sha = hashlib.sha256(tmp.read_bytes()).hexdigest()
+    tmp.unlink(missing_ok=True)
+    return {
+        "coincide": sha == recipe["kmb_sha256"],
+        "sha256": sha,
+        "esperado": recipe["kmb_sha256"],
+        "qubits": int(info["qubits"]),
+        "toffoli_like": int(info["toffoli_like"]),
+        "S": float(recipe["S"]),
+    }
+
+
 def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
                      max_proposals: int | None = None,
                      time_budget_seconds: float | None = None,
@@ -203,7 +308,8 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
                      verify: bool = True,
                      base_batch: int = 17, base_nslot: int | None = None,
                      base_toom3: bool = False,
-                     on_proposal: Callable[[dict[str, Any]], None] | None = None
+                     on_proposal: Callable[[dict[str, Any]], None] | None = None,
+                     output_dir: str | Path | None = None
                      ) -> dict[str, Any]:
     """Corredor LLM para DQI: el estratega mueve los knobs del
     generador híbrido durante la ejecución y solo sobrevive el menor S.
@@ -211,7 +317,10 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
     Devuelve {task, target_S, best_S, best_knobs, reached, proposals,
     valid, invalid, llm_calls, llm_fallbacks}. `llm_client` es una
     función prompt -> dict (por defecto, el cliente real de
-    auto_mvp.llm); los tests le pasan una falsa.
+    auto_mvp.llm); los tests le pasan una falsa. Si `output_dir` se
+    da, al final guarda la mejor semilla (`mejor_semilla.kmb` +
+    `mejor_semilla.json`, con la receta y el SHA256) para que sea
+    transparente: reproducible y evaluable.
     """
     target = float(target_S)
     if not (math.isfinite(target) and target > 0):
@@ -248,10 +357,13 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
                                         ("batch", "nslot", "toom3")},
                "note": "base medida"})
     if best_S <= target:
-        return {"task": "dqi", "target_S": target, "best_S": best_S,
-                "best_knobs": best, "reached": True, "proposals": 0,
-                "valid": 1, "invalid": 0, "llm_calls": 0,
-                "llm_fallbacks": 0, "stopped": "la base ya llega"}
+        res = {"task": "dqi", "target_S": target, "best_S": best_S,
+               "best_knobs": best, "reached": True, "proposals": 0,
+               "valid": 1, "invalid": 0, "llm_calls": 0,
+               "llm_fallbacks": 0, "stopped": "la base ya llega"}
+        if output_dir is not None:
+            res["semilla"] = save_best_seed(n, m, best, output_dir)
+        return res
 
     history: list[dict[str, Any]] = [dict(best)]
     proposals = 0
@@ -324,19 +436,27 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
                 >= float(time_budget_seconds)):
             stopped = f"presupuesto de tiempo ({time_budget_seconds}s)"
             break
-    return {"task": "dqi", "target_S": target, "best_S": best_S,
-            "best_knobs": best, "reached": bool(best_S <= target),
-            "proposals": proposals, "valid": valid, "invalid": invalid,
-            "llm_calls": llm_calls, "llm_fallbacks": llm_fallbacks,
-            "stopped": stopped}
+    res = {"task": "dqi", "target_S": target, "best_S": best_S,
+           "best_knobs": best, "reached": bool(best_S <= target),
+           "proposals": proposals, "valid": valid, "invalid": invalid,
+           "llm_calls": llm_calls, "llm_fallbacks": llm_fallbacks,
+           "stopped": stopped}
+    if output_dir is not None:
+        res["semilla"] = save_best_seed(n, m, best, output_dir)
+    return res
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI: python -m auto_mvp.llm_auto_dqi --target-S 1e13."""
+    """CLI: python -m auto_mvp.llm_auto_dqi --target-S 1e13.
+
+    --reproducir <mejor_semilla.json> reconstruye la semilla desde
+    su receta y comprueba que el SHA256 coincide (la semilla es
+    reproducible). No corre el corredor.
+    """
     ap = argparse.ArgumentParser(
         description="Corredor LLM para DQI (el estratega mueve los "
                     "knobs del generador híbrido).")
-    ap.add_argument("--target-S", type=float, required=True)
+    ap.add_argument("--target-S", type=float, default=None)
     ap.add_argument("--n", type=int, default=70)
     ap.add_argument("--m", type=int, default=4095)
     ap.add_argument("--max-proposals", type=int, default=None)
@@ -348,7 +468,20 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--base-batch", type=int, default=17)
     ap.add_argument("--base-nslot", type=int, default=None)
     ap.add_argument("--base-toom3", action="store_true")
+    ap.add_argument("--output-dir", type=str, default=None,
+                    help="donde guardar la mejor semilla "
+                         "(mejor_semilla.kmb + mejor_semilla.json)")
+    ap.add_argument("--reproducir", type=str, default=None,
+                    help="receta (mejor_semilla.json) a reproducir "
+                         "y verificar por SHA256")
     args = ap.parse_args(argv)
+    if args.reproducir is not None:
+        res = reproducir_semilla(args.reproducir,
+                                 output_dir=args.output_dir)
+        print(json.dumps(res, ensure_ascii=False, indent=2))
+        return 0 if res["coincide"] else 1
+    if args.target_S is None:
+        ap.error("--target-S es obligatorio (salvo --reproducir)")
     res = run_llm_auto_dqi(
         args.target_S, n=args.n, m=args.m,
         max_proposals=args.max_proposals,
@@ -356,7 +489,8 @@ def main(argv: list[str] | None = None) -> int:
         seed=args.seed,
         batch_size=args.batch_size, verify=not args.no_verify,
         base_batch=args.base_batch, base_nslot=args.base_nslot,
-        base_toom3=args.base_toom3)
+        base_toom3=args.base_toom3,
+        output_dir=args.output_dir)
     print(json.dumps(res, ensure_ascii=False, indent=2))
     return 0 if res["reached"] else 1
 
