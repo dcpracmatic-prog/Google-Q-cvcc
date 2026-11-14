@@ -133,6 +133,18 @@ def rand_gate(k, tof_ok):
 
 
 def cost(gates, T, k, t_budget):
+    """Coste del SA (v2.14: solo compuertas cobrables).
+
+    La única métrica es la baja de Toffolis con la permutación
+    intacta. El coste es: desajuste de la permutación (mism) +
+    penalización por exceder el presupuesto de Toffoli (over). NO
+    hay ningún término por el número total de instrucciones ni por
+    las Clifford: quitar Clifford no mueve el S y no se premia.
+    El circuito candidato siempre tiene la misma longitud que el
+    original (L puertas); lo único que cambia es cuántas son
+    Toffoli. La aceptación final exige ganancia estricta de
+    Toffoli (gain > 0) con permutación idéntica (mism = 0).
+    """
     p = apply(gates, k)
     mism = diff_count(p, T, k)
     over = max(0, ntof(gates) - t_budget)

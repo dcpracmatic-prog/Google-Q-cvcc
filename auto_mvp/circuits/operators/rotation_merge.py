@@ -187,7 +187,27 @@ def _scan(lines, out, stats, pending, emit, flush_all) -> None:
             # Diagonales: conmutan con Rz, la pendiente sigue viva.
             out.append(raw)
             continue
-        # H, R, HMR, CCX, CSWAP y resto: vacían los qubits que tocan.
+        if op == "CCX":
+            # Toffoli: una Z en los CONTROLES conmuta con él (es
+            # diagonal en la base de control y el Toffoli no cambia
+            # los controles); solo el OBJETIVO vacía su pendiente
+            # (X y Z no conmutan). Antes se vaciaban los tres y se
+            # perdían fusiones: una Z_POW en un control que podía
+            # juntarse con otra más adelante ya no llegaba.
+            if args[2] in pending:
+                emit(args[2])
+            out.append(raw)
+            continue
+        if op == "CSWAP":
+            # Fredkin: solo el CONTROL (primer qubit) conmuta con
+            # la Z; los dos que se intercambian vacían (la Z se
+            # mueve con el qubit, no es una conmutación simple).
+            for q in args[1:]:
+                if q in pending:
+                    emit(q)
+            out.append(raw)
+            continue
+        # H, R, HMR y resto: vacían los qubits que tocan.
         for q in args:
             if q.startswith("q") and q in pending:
                 emit(q)

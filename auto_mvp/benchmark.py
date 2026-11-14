@@ -38,9 +38,24 @@ from .circuits.operators.rotation_merge import merge_file
 
 
 def _measure_invsqrt(path: Path) -> dict[str, Any]:
-    """Mide un circuito invsqrt (S del protocolo oficial)."""
+    """Mide un circuito invsqrt (S del protocolo oficial).
+
+    Devuelve también el conteo de Toffolis (media por shot) y el
+    T-count total exacto del verificador: t = 4*(toffoli_equivalent
+    - toffoli_count), porque C = Toffolis + T/4. El T-count incluye
+    las rotaciones sintetizadas con el eps del margen de error, así
+    que es el número que cobra el S, no una estimación estática.
+    """
     m = fast_verify_invsqrt(path, max_x=1024)
-    return {"valid": bool(m["valid"]), "S": m.get("S")}
+    t_count = None
+    if m.get("toffoli_equivalent") is not None and \
+            m.get("toffoli_count") is not None:
+        t_count = 4.0 * (float(m["toffoli_equivalent"])
+                         - float(m["toffoli_count"]))
+    return {"valid": bool(m["valid"]), "S": m.get("S"),
+            "toffoli_like": (None if m.get("toffoli_count") is None
+                             else float(m["toffoli_count"])),
+            "t_count": t_count}
 
 
 def _measure_dqi(path: Path) -> dict[str, Any]:
@@ -56,6 +71,8 @@ def _measure_dqi(path: Path) -> dict[str, Any]:
         st = c.operation_statistics()
         return {"valid": True, "qubits": c.num_qubits,
                 "toffoli_like": st.num_toffoli_like,
+                # DQI prohíbe el Z_POW: el T-count es 0.
+                "t_count": 0.0,
                 "instructions": st.num_instructions}
     except Exception as exc:  # noqa: BLE001 - el .kmx no carga
         return {"valid": False, "reason": str(exc)[:200]}
@@ -85,6 +102,7 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "base": base,
         "base_S": base.get("S"),
         "base_toffoli": base.get("toffoli_like"),
+        "base_t": base.get("t_count"),
         "operators": {},
     }
     if not base["valid"]:
@@ -93,6 +111,7 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         return result
     base_S = base.get("S")
     base_toffoli = base.get("toffoli_like")
+    base_t = base.get("t_count")
     # Peephole.
     p_out = work / "peephole.kmx"
     p_stats = clean_file(src, p_out)
@@ -106,6 +125,10 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "delta_toffoli": (None if p_meas.get("toffoli_like") is None
                           or base_toffoli is None else
                           int(p_meas["toffoli_like"]) - int(base_toffoli)),
+        "t_count": p_meas.get("t_count"),
+        "delta_t": (None if p_meas.get("t_count") is None
+                    or base_t is None else
+                    float(p_meas["t_count"]) - float(base_t)),
     }
     # Rotation merge.
     r_out = work / "rotation.kmx"
@@ -120,6 +143,10 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "delta_toffoli": (None if r_meas.get("toffoli_like") is None
                           or base_toffoli is None else
                           int(r_meas["toffoli_like"]) - int(base_toffoli)),
+        "t_count": r_meas.get("t_count"),
+        "delta_t": (None if r_meas.get("t_count") is None
+                    or base_t is None else
+                    float(r_meas["t_count"]) - float(base_t)),
     }
     # Conmutación (cancela pares adyacentes Y separados por
     # compuertas que conmutan; subsume al peephole).
@@ -135,6 +162,10 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "delta_toffoli": (None if c_meas.get("toffoli_like") is None
                           or base_toffoli is None else
                           int(c_meas["toffoli_like"]) - int(base_toffoli)),
+        "t_count": c_meas.get("t_count"),
+        "delta_t": (None if c_meas.get("t_count") is None
+                    or base_t is None else
+                    float(c_meas["t_count"]) - float(base_t)),
     }
     # Fan-out (medición, no reescribe el circuito: el potencial es
     # lo que se ahorraría si los grupos válidos se colapsaran).
@@ -148,6 +179,8 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "delta_S": 0 if base_S is not None else None,
         "toffoli_like": base_toffoli,
         "delta_toffoli": 0 if base_toffoli is not None else None,
+        "t_count": base_t,
+        "delta_t": 0 if base_t is not None else None,
     }
     # sa_windows (con peephole como pre-paso, como en el corredor).
     # En circuitos enormes se salta: el SA no es práctico a esa escala.
@@ -171,17 +204,23 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
                                   or base_toffoli is None else
                                   int(s_meas["toffoli_like"])
                                   - int(base_toffoli)),
+                "t_count": s_meas.get("t_count"),
+                "delta_t": (None if s_meas.get("t_count") is None
+                            or base_t is None else
+                            float(s_meas["t_count"]) - float(base_t)),
             }
         else:
             result["operators"]["sa_windows"] = {
                 "stats": {"gain_reported": 0}, "valid": False, "S": None,
                 "delta_S": None, "toffoli_like": None,
-                "delta_toffoli": None, "reason": prop.get("reason", ""),
+                "delta_toffoli": None, "t_count": None, "delta_t": None,
+                "reason": prop.get("reason", ""),
             }
     else:
         result["operators"]["sa_windows"] = {
             "stats": {}, "valid": None, "S": None, "delta_S": None,
             "toffoli_like": None, "delta_toffoli": None,
+            "t_count": None, "delta_t": None,
             "reason": "saltado: el circuito es demasiado grande para el SA",
         }
     # Lo cualitativo, por reglas.

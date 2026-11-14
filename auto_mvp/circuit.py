@@ -447,6 +447,32 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
             encoding="utf-8")).get("gain_total", 0))
     except Exception:
         gain = 0
+    # Aceptación v2.14: la única métrica es la baja ESTRICTA de
+    # compuertas cobrables (Toffoli), verificada en el archivo de
+    # salida, no solo en el log del SA. La reducción de
+    # instrucciones totales o de Clifford no cuenta. Como el SA
+    # conserva la permutación y no toca Z_POW, bajar el Toffoli es
+    # bajar el S (invsqrt: C = Toffolis + T/4; DQI: S ∝ T). Si el
+    # log dice que ganó pero el archivo no lo confirma, se rechaza;
+    # si no ganó nada, se reporta gain 0 (negativo medido, no fallo).
+    from .circuits.cost_models.chargeable import count_chargeable
+    try:
+        with Path(src).open(encoding="utf-8") as f:
+            tof_in = count_chargeable(f)["toffoli"]
+        with Path(out_path).open(encoding="utf-8") as f:
+            tof_out = count_chargeable(f)["toffoli"]
+    except Exception:
+        tof_in = tof_out = None
+    if tof_in is not None and tof_out is not None:
+        verified_gain = tof_in - tof_out
+        if gain > 0 and verified_gain <= 0:
+            return {"ok": False, "gain": 0,
+                    "reason": ("el log del SA dice ganancia "
+                               f"{gain} pero el archivo no baja el "
+                               "Toffoli"),
+                    "peephole": peephole_stats,
+                    "rotation_merge": rotation_stats}
+        gain = max(0, verified_gain)
     return {"ok": True, "gain": gain, "reason": "",
             "peephole": peephole_stats,
             "rotation_merge": rotation_stats}

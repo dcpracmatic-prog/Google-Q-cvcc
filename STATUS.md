@@ -1,10 +1,43 @@
-# STATUS.md — estado del repo (v2.13.0)
+# STATUS.md — estado del repo (v2.14.0)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.14.0** (2026-11-14): pedido de Arturo (que los pases apunten
+  a lo que cobra el S, no a limpiar Clifford). Cuatro piezas:
+  - **rotation_merge: Z_POW en controles de CCX/CSWAP pasa**
+    (`rotation_merge.py`): una Z en los controles de un Toffoli
+    conmuta con él, así que la pendiente sobrevive y puede
+    fusionarse (antes se vaciaban los tres qubits). Sintético:
+    dos Z_POW(0.25) separadas por un CCX fusionan a S (gratis),
+    T 2.0 → 0.0. En la semilla y la muestra: 0 fusiones nuevas
+    (negativo medido).
+  - **commuting consciente de Toffoli** (`commuting.py`): para un
+    par CCX, una intermedia puede quedarse si conmuta con el
+    Toffoli (diagonal en controles, CX con control en a/b, otro
+    Toffoli compatible); una diagonal o CX en el objetivo c sigue
+    bloqueando. Stats nuevas: `toffoli_pairs_cancelled`,
+    `toffoli_removed`. Medido: 10 sintéticos correctos; semilla
+    198 quitados 0 Toffoli; muestra 4.216 quitados 0 Toffoli; DQI
+    público 1.024.860 quitados (512.430 pares) **0 Toffoli** —
+    igual que v2.11: el DQI no tiene pares Toffoli cancelables ni
+    con la regla extendida (974 s).
+  - **Modelo cobrable + delta_t** (`cost_models/chargeable.py`,
+    `benchmark.py`): la regla de cobro del verificador (Clifford
+    0, ángulo T 1, otro ángulo `0.56*log2(1/eps)+5.3`; CCX/CSWAP
+    1 Toffoli). Hallazgo: el eps lo deriva el verificador del
+    margen de error — en la semilla son 28.62 T por rotación, no
+    18.74. El benchmark reporta `t_count` y `delta_t` con el
+    T-count EXACTO del verificador (semilla: T = 1.186,36) y
+    `delta_toffoli` ahora también en invsqrt.
+  - **SA: aceptación solo por baja de cobrables** (`circuit.py`,
+    `sa_windows.py`): la ganancia se verifica en el archivo de
+    salida (Toffoli de entrada vs salida), no solo en el log; si
+    el log dice que ganó pero el archivo no baja el Toffoli, se
+    rechaza. La reducción de instrucciones/Clifford no cuenta.
+    Ver `notes/v2.14.0.md` y `tests/test_tool_v2140.py` (9 tests).
 - **v2.13.0** (2026-11-14): pedido de Arturo (subir el Notebook de
   mapeo a GitHub y corregir lo de rotation_merge). Dos piezas:
   - **Salto de línea heredado** (`rotation_merge.py`, `peephole.py`):

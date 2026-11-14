@@ -17,6 +17,14 @@ Reglas (todas exactas, todas locales):
   qubits disjuntos de los de la compuerta (si una toca sus qubits,
   no conmuta y el par no se cancela). Es la regla conservadora:
   solo la disyunción, sin casos especiales de conmutación.
+- EXCEPCIÓN v2.14 (Toffoli): para un par CCX, una intermedia puede
+  quedarse si CONMUTA con el Toffoli aunque toque sus controles:
+  una diagonal (Z, CZ, CCZ, Z_POW) en los controles; una CX con
+  control en a o b y objetivo fuera; otro Toffoli cuyo objetivo no
+  sea control del primero. Una diagonal o CX que toque el OBJETIVO
+  c no conmuta y sigue bloqueando. Así el operador busca la
+  cancelación de Toffolis en el sumador/multiplicador del DQI, no
+  solo desplazar Clifford.
 - La búsqueda hacia atrás está acotada (MAX_GAP compuertas, 256
   por defecto en v2.11: en la semilla el resultado satura ahí): un
   par más separado no se busca (el resultado sigue siendo válido,
@@ -45,6 +53,42 @@ from .peephole import SELF_INVERSE, _split
 MAX_GAP = 256
 
 
+# Compuertas diagonales (conmutan con Rz y entre sí).
+_DIAGONAL = frozenset({"Z", "CZ", "CCZ", "Z_POW"})
+
+
+def _commutes_with_ccx(g_op: str, g_args: list[str],
+                       a: str, b: str, c: str) -> bool:
+    """¿La compuerta (g_op, g_args) conmuta con CCX(a,b,c)?
+
+    Reglas exactas (a, b controles; c objetivo):
+    - Disjunta: conmuta.
+    - Diagonal: conmuta si no toca el objetivo c (una diagonal en
+      los controles es constante en el par de estados que el
+      Toffoli intercambia; una en c no lo es).
+    - CX: conmuta si su control es a o b y su objetivo no es a, b
+      ni c; o si su objetivo ES c y su control no es a, b ni c (dos
+      X sobre c con controles independientes conmutan).
+    - CCX: conmuta si el objetivo de una no es control de la otra.
+    - El resto: solo si es disjunta.
+    """
+    qs = _qubits_of(g_op, g_args)
+    if not (qs & {a, b, c}):
+        return True
+    if g_op in _DIAGONAL:
+        return c not in qs
+    if g_op == "CX":
+        ctrl, tgt = g_args[0], g_args[1]
+        if ctrl in (a, b) and tgt not in (a, b, c):
+            return True
+        if tgt == c and ctrl not in (a, b, c):
+            return True
+        return False
+    if g_op == "CCX":
+        return g_args[2] not in (a, b) and c not in (g_args[0], g_args[1])
+    return False
+
+
 def _qubits_of(op: str, args: list[str]) -> frozenset:
     """Los qubits que toca una compuerta (por su opcode)."""
     if op in ("CCX", "CCZ", "CSWAP", "CCZ_IF"):
@@ -66,7 +110,8 @@ def _commuting_pass(lines, out, max_pending: int = 4096,
     encuentra, las dos se cancelan (la de la pila sale y la nueva
     no entra); si no, la nueva entra a la pila. Devuelve las stats.
     """
-    stats = {"removed": 0, "pairs_cancelled": 0, "pairs_commuting": 0}
+    stats = {"removed": 0, "pairs_cancelled": 0, "pairs_commuting": 0,
+             "toffoli_pairs_cancelled": 0, "toffoli_removed": 0}
     depth = 0
     # La pila: (opcode, operandos, línea, depth, qubits).
     stack: list[tuple[str, list[str], str, int, frozenset]] = []
@@ -129,10 +174,20 @@ def _commuting_pass(lines, out, max_pending: int = 4096,
                         break
                     if g_op != op or g_args != args:
                         continue
-                    # ¿Todo lo que hay entre medias es disjunto?
+                    # ¿Todo lo que hay entre medias conmuta con el
+                    # par? Para un CCX se usa la regla consciente de
+                    # Toffoli (diagonales en controles, CX con
+                    # control en a/b, otro Toffoli compatible); para
+                    # el resto, solo la disyunción.
                     ok = True
                     for j in range(pos + 1, len(stack)):
-                        if stack[j][4] & qs:
+                        if op == "CCX":
+                            if not _commutes_with_ccx(
+                                    stack[j][0], stack[j][1],
+                                    args[0], args[1], args[2]):
+                                ok = False
+                                break
+                        elif stack[j][4] & qs:
                             ok = False
                             break
                     if ok:
@@ -144,6 +199,9 @@ def _commuting_pass(lines, out, max_pending: int = 4096,
                                 del index[key]
                         stats["removed"] += 2
                         stats["pairs_cancelled"] += 1
+                        if op == "CCX":
+                            stats["toffoli_pairs_cancelled"] += 1
+                            stats["toffoli_removed"] += 2
                         if len(stack) - pos > 0:
                             stats["pairs_commuting"] += 1
                         cancelled = True
