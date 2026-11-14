@@ -1,10 +1,22 @@
-# STATUS.md — estado del repo (v2.10.0)
+# STATUS.md — estado del repo (v2.11.0)
 
 Última actualización: 2026-11-13. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.11.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
+  (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 5/5,
+  ÚLTIMA). Dos piezas:
+  - **MAX_GAP 256** en la conmutación (antes 16): en la semilla el
+    resultado satura en 256 (42 con 16, 48 con 32, 58 con 64, 70
+    con 128, 76 con 256 y lo mismo con 512/1024/4096). Tras el
+    peephole: 76 más (38 pares), S idéntico, válido, idempotente.
+  - **CONMUTACIÓN EN EL BENCHMARK** (`auto_mvp/benchmark.py`):
+    quinto operador de la comparación. Tabla de la semilla en
+    `notes/v2.11.0-benchmark-invsqrt.md`: commuting 198 (99 pares,
+    39 por conmutación), S idéntico. Medición DQI con GAP 256 en
+    curso (GAP 16 daba +235.386). Ver `notes/v2.11.0.md`.
 - **v2.10.0** (2026-11-13): INNOVAR, PROBAR, AUDITAR, cuarta vuelta
   (directiva de Arturo 2026-11-13 18:25 CST, bucle ×5, vuelta 4/5).
   Una pieza:

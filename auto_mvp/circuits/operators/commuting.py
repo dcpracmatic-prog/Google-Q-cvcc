@@ -17,9 +17,10 @@ Reglas (todas exactas, todas locales):
   qubits disjuntos de los de la compuerta (si una toca sus qubits,
   no conmuta y el par no se cancela). Es la regla conservadora:
   solo la disyunción, sin casos especiales de conmutación.
-- La búsqueda hacia atrás está acotada (MAX_GAP compuertas): un par
-  más separado no se busca (el resultado sigue siendo válido, solo
-  se pierde una cancelación lejana).
+- La búsqueda hacia atrás está acotada (MAX_GAP compuertas, 256
+  por defecto en v2.11: en la semilla el resultado satura ahí): un
+  par más separado no se busca (el resultado sigue siendo válido,
+  solo se pierde una cancelación lejana).
 - La Z_POW no entra aquí (la fusión es del peephole, que ya la hace
   en adyacencia); este operador solo cancela pares autoinversos.
 - PUSH/POP y las líneas no-compuerta vacían la pila, como en el
@@ -38,7 +39,10 @@ from pathlib import Path
 from .peephole import SELF_INVERSE, _split
 
 # Máxima distancia (en compuertas) entre las dos del par.
-MAX_GAP = 16
+# v2.11: era 16; en la semilla el resultado satura en 256 (42 con
+# 16, 48 con 32, 58 con 64, 70 con 128, 76 con 256 y lo mismo con
+# 512/1024/4096). 256 es el punto donde ya no aparece nada más.
+MAX_GAP = 256
 
 
 def _qubits_of(op: str, args: list[str]) -> frozenset:

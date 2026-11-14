@@ -14,6 +14,11 @@ reescribe el circuito (no hay grupos válidos que reescribir en la
 semilla ni en el DQI), pero su potencial medido aparece junto a los
 demás, para que la comparación sea completa.
 
+La v2.11 añade la CONMUTACIÓN como quinto operador: cancela pares
+adyacentes Y separados por compuertas que conmutan (subsume al
+peephole: en la semilla quita 198 en total, 122 adyacentes + 76 por
+conmutación con GAP 256).
+
 Todo se mide con el protocolo oficial (fast_verify_invsqrt,
 max_x=1024). El sa_windows corre con K y presupuesto chicos (por
 defecto K=5, 5 s) para que la comparación sea rápida; no es una
@@ -26,6 +31,7 @@ from pathlib import Path
 from typing import Any
 
 from .circuit import fast_verify_invsqrt, propose_sa_windows
+from .circuits.operators.commuting import clean_commuting_file
 from .circuits.operators.fanout import detect_fanout_file
 from .circuits.operators.peephole import clean_file
 from .circuits.operators.rotation_merge import merge_file
@@ -114,6 +120,21 @@ def benchmark(circuit_path: str | Path, *, work_dir: str | Path | None = None,
         "delta_toffoli": (None if r_meas.get("toffoli_like") is None
                           or base_toffoli is None else
                           int(r_meas["toffoli_like"]) - int(base_toffoli)),
+    }
+    # Conmutación (cancela pares adyacentes Y separados por
+    # compuertas que conmutan; subsume al peephole).
+    c_out = work / "commuting.kmx"
+    c_stats = clean_commuting_file(src, c_out)
+    c_meas = measure(c_out)
+    result["operators"]["commuting"] = {
+        "stats": c_stats, "valid": bool(c_meas["valid"]),
+        "S": c_meas.get("S"),
+        "delta_S": (None if c_meas.get("S") is None or base_S is None
+                    else float(c_meas["S"]) - float(base_S)),
+        "toffoli_like": c_meas.get("toffoli_like"),
+        "delta_toffoli": (None if c_meas.get("toffoli_like") is None
+                          or base_toffoli is None else
+                          int(c_meas["toffoli_like"]) - int(base_toffoli)),
     }
     # Fan-out (medición, no reescribe el circuito: el potencial es
     # lo que se ahorraría si los grupos válidos se colapsaran).

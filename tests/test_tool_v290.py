@@ -32,8 +32,12 @@ def test_benchmark_incluye_fanout(tmp_path):
                for c in rep["comments"])
 
 
-def test_benchmark_tabla_tiene_cuatro_operadores(tmp_path):
-    """Peephole, rotation_merge, fanout y sa_windows en la tabla."""
+def test_benchmark_tabla_tiene_cinco_operadores(tmp_path):
+    """Peephole, commuting, rotation_merge, fanout y sa_windows.
+
+    v2.11: la conmutación entró como quinto operador; el conjunto
+    ya no es de cuatro. (El nombre viejo decía cuatro.)
+    """
     rep = benchmark(SEED_INVSQRT, work_dir=tmp_path, run_sa=False)
     assert set(rep["operators"]) == {
-        "peephole", "rotation_merge", "fanout", "sa_windows"}
+        "peephole", "commuting", "rotation_merge", "fanout", "sa_windows"}
