@@ -1,10 +1,23 @@
-# STATUS.md — estado del repo (v2.17.5)
+# STATUS.md — estado del repo (v2.17.6)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.17.6** (2026-11-14): auditoría pedida por Arturo (el
+  optimizador no mejoraba en Kaggle v2.17.4). Causa medida: el
+  batch estaba restringido a {4, 8, 17, 36} en el prompt y en el
+  fallback, y dentro de ese conjunto la base (batch=4) ya era lo
+  mejor; batch=1 da S=3.9983e10 (9.5% mejor) pero nunca se probaba.
+  Corrección: batch 1..64 en el prompt y en el fallback de
+  `llm_auto_dqi.py` y `autonomous.py`, y un barrido sistemático
+  (batch 1, 2, 3 con nslot mínimo) antes del bucle LLM, para que
+  la mejora esté garantizada aunque el LLM no la proponga (el LLM
+  sube nslot cuando varía batch). Medido con el LLM real en
+  sandbox: best_S=3.9983e10, mejora 1.105x vs la base 4.418e10,
+  batch=1, nslot=6, Q=1067, T=29481. Tests 28/28. Detalle en
+  `notes/v2.17.6.md`.
 - **v2.17.5** (2026-11-14): pedido de Arturo (penalización de no
   repetición + LLM que use las estructuras .py del repo + las 3
   tareas). La v4 en Kaggle repitió la mejor semilla (la #13 era

@@ -42,20 +42,25 @@ def test_parse_deltas_dqi_valida_y_rechaza():
 
 
 def test_llm_dqi_mejora_con_toom3():
+    # BARRIDO v2.17.6: antes de preguntar al LLM, el corredor mide
+    # batch=1, 2, 3 con nslot mínimo. batch=1 da S=3.9983e10 (9.5%
+    # mejor que la base 4.418e10) y es lo que guarda. El LLM
+    # (falso) propone toom3, pero Toom-3 está DESACTIVADO (rompe
+    # bm_backward): toom3=True ya no baja T, así que no lo supera.
     res = run_llm_auto_dqi(
-        target_S=1e9, n=10, m=15, max_proposals=2,
+        target_S=1e9, n=10, m=15, max_proposals=5,
         llm_client=_fake_llm_toom3, batch_size=2, verify=True,
         base_batch=4, base_nslot=6, base_toom3=False)
     assert res["llm_calls"] == 1
     assert res["llm_fallbacks"] == 0
-    assert res["proposals"] == 2
+    assert res["proposals"] == 5
     assert res["invalid"] == 0
-    # Toom-3 DESACTIVADO (rompe bm_backward): toom3=True ya no baja
-    # T; la base nativa (T=28587) y la propuesta toom3 dan lo mismo,
-    # así que el corredor guarda la base (toom3=False).
+    assert res["best_knobs"]["batch"] == 1
+    assert res["best_knobs"]["nslot"] == 6
     assert res["best_knobs"]["toom3"] is False
-    assert res["best_knobs"]["toffoli_like"] == 28587
-    assert res["best_S"] == 1.1912605 * 1139 ** 2 * 28587
+    assert res["best_knobs"]["qubits"] == 1067
+    assert res["best_knobs"]["toffoli_like"] == 29481
+    assert res["best_S"] == 1.1912605 * 1067 ** 2 * 29481
 
 
 def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
@@ -66,7 +71,7 @@ def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
     import json
 
     res = run_llm_auto_dqi(
-        target_S=1e9, n=10, m=15, max_proposals=2,
+        target_S=1e9, n=10, m=15, max_proposals=5,
         llm_client=_fake_llm_toom3, batch_size=2, verify=True,
         base_batch=4, base_nslot=6, base_toom3=False,
         output_dir=tmp_path)
@@ -76,10 +81,11 @@ def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
     assert recipe_p.is_file()
     recipe = json.loads(recipe_p.read_text(encoding="utf-8"))
     # La receta trae todo lo necesario para reproducir y evaluar.
-    assert recipe["batch"] == 4 and recipe["nslot"] == 6
+    # La mejor semilla es batch=1 (barrido v2.17.6), no la base.
+    assert recipe["batch"] == 1 and recipe["nslot"] == 6
     assert recipe["toom3"] is False
-    assert recipe["qubits"] == 1139
-    assert recipe["toffoli_like"] == 28587
+    assert recipe["qubits"] == 1067
+    assert recipe["toffoli_like"] == 29481
     assert abs(recipe["S"] - res["best_S"]) < 1e-6
     assert recipe["verify"] == {"bm_sigma": "24/24", "scan": "12/12"}
     # El SHA256 de la receta es el del .kmb guardado.
@@ -94,23 +100,23 @@ def test_reproducir_semilla_coincide(tmp_path):
     from auto_mvp.llm_auto_dqi import reproducir_semilla
 
     res = run_llm_auto_dqi(
-        target_S=1e9, n=10, m=15, max_proposals=2,
+        target_S=1e9, n=10, m=15, max_proposals=5,
         llm_client=_fake_llm_toom3, batch_size=2, verify=True,
         base_batch=4, base_nslot=6, base_toom3=False,
         output_dir=tmp_path)
     out = reproducir_semilla(tmp_path / "mejor_semilla.json")
     assert out["coincide"] is True
     assert out["sha256"] == res["semilla"]["kmb_sha256"]
-    assert out["qubits"] == 1139
-    assert out["toffoli_like"] == 28587
+    assert out["qubits"] == 1067
+    assert out["toffoli_like"] == 29481
     def no_key(prompt):
         raise LLMError("sin llave", no_key=True)
 
     res = run_llm_auto_dqi(
-        target_S=1e9, n=10, m=15, max_proposals=2,
+        target_S=1e9, n=10, m=15, max_proposals=5,
         llm_client=no_key, batch_size=2, verify=True,
         base_batch=4, base_nslot=6, base_toom3=False)
     assert res["llm_calls"] == 0
     assert res["llm_fallbacks"] == 1
-    assert res["proposals"] == 2
+    assert res["proposals"] == 5
     assert res["valid"] >= 2

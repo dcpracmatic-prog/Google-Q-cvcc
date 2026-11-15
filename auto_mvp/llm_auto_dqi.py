@@ -79,7 +79,13 @@ R_DQI = 1.1912605
 
 # Deltas por defecto (sin modelo): batch y nslot rotando, toom3
 # alternando. Son los knobs que el LLM movería.
-_DEFAULT_BATCH = (4, 8, 17, 36)
+# AUDITORÍA v2.17.6: antes era (4, 8, 17, 36) y el LLM solo podía
+# proponer esos batch. A n=10, m=15 el mejor batch ES 4 (la base),
+# así que NUNCA había mejora. Medido: batch=1 da S=3.9983e10
+# (9.5% mejor que la base 4.418e10) porque Q baja de 1139 a 1067
+# y Q^2 domina S = R*Q^2*T. Se añaden 1, 2, 3 para que el
+# optimizador pueda encontrarlos.
+_DEFAULT_BATCH = (1, 2, 3, 4, 8, 17, 36)
 _DEFAULT_NSLOT_EXTRA = (0, 2, 6)
 
 
@@ -109,11 +115,15 @@ def _prompt(best: dict[str, Any], history: list[dict[str, Any]],
         f"{hist or '- nada todavía'}\n\n"
         f"Propón un LOTE de hasta {int(batch_size)} movimientos "
         "distintos como JSON: "
-        '{"deltas": [{"batch": 4|8|17|36, "nslot": <entero>, '
+        '{"deltas": [{"batch": 1..64, "nslot": <entero>, '
         '"toom3": true|false, "seed": <entero>, '
         '"reason": "<una frase>"}, ...]}. '
         "Varía batch, nslot y toom3 respecto a lo ya probado; "
         "nslot debe ser >= n//2+1 (si no, el circuito no cabe). "
+        "Pista medida: S = R*Q^2*T y Q^2 domina; a escala chica "
+        "un batch PEQUEÑO (1, 2, 3) baja Q y baja S aunque T suba "
+        "un poco; nslot mínimo suele ser lo mejor (más nslot = "
+        "más qubits, S sube). "
         "No propongas compuertas ni circuitos: solo los knobs; el "
         "generador construye y la verificación decide si vale."
     )
@@ -372,7 +382,50 @@ def run_llm_auto_dqi(target_S: float, n: int = 70, m: int = 4095,
     llm_calls = 0
     llm_fallbacks = 0
     stopped = "límite alcanzado"
-    while True:
+    # BARRIDO SISTEMÁTICO (v2.17.6, auditoría): antes de preguntar
+    # al LLM, medir los batch pequeños con nslot mínimo. El LLM
+    # (1.5B) sube nslot cuando varía batch y nunca prueba batch=1,
+    # 2, 3 con nslot mínimo, que es donde está la mejora (medido
+    # a n=10, m=15: batch=1, nslot=6 da S=3.998e10, 9.5% mejor que
+    # la base 4.418e10; el LLM propuso batch=1 con nslot=7..13 y
+    # todos salieron peores). Es fuerza bruta sobre circuitos: se
+    # mide el circuito real, no un número supuesto. Respeta el
+    # límite de propuestas y el presupuesto de tiempo.
+    for _b in (1, 2, 3):
+        if _b == base_batch:
+            continue
+        if (max_proposals is not None
+                and proposals >= int(max_proposals)):
+            stopped = f"límite de propuestas ({max_proposals})"
+            break
+        if (time_budget_seconds is not None
+                and time.monotonic() - started
+                >= float(time_budget_seconds)):
+            stopped = f"presupuesto de tiempo ({time_budget_seconds}s)"
+            break
+        proposals += 1
+        _entry = _measure_knobs(n, m, _b, min_nslot, base_toom3,
+                                verify=verify)
+        _entry.update({"proposal": proposals, "llm": False,
+                       "reason_llm": "barrido sistemático: batch "
+                       "pequeño, nslot mínimo"})
+        if not _entry["valid"]:
+            invalid += 1
+            _entry["note"] = "INVÁLIDO: no cuenta, no es nada"
+        else:
+            valid += 1
+            if _entry["S"] < best_S:
+                best_S = float(_entry["S"])
+                best = dict(_entry)
+                _entry["note"] = "MEJORA: nuevos mejores knobs"
+            else:
+                _entry["note"] = "válido pero no mejora"
+        history.append(_entry)
+        _progress(_entry)
+        if best_S <= target:
+            stopped = "meta alcanzada"
+            break
+    while stopped == "límite alcanzado":
         round_no = proposals + 1
         # 1. El estratega propone un LOTE (o los knobs por defecto
         # si no hay modelo). Cada delta se materializa y se mide.

@@ -97,7 +97,12 @@ TEMP = 0.7
 
 # Knobs por defecto (sin modelo): batch/nslot rotando, toom3
 # alternando. Son los knobs que el LLM movería.
-_DEFAULT_BATCH = (4, 8, 17, 36)
+# AUDITORÍA v2.17.6: antes era (4, 8, 17, 36) y el LLM solo podía
+# proponer esos batch. A n=10, m=15 el mejor batch ES 4 (la base),
+# así que NUNCA había mejora. Medido: batch=1 da S=3.9983e10
+# (9.5% mejor que la base 4.418e10) porque Q baja de 1139 a 1067
+# y Q^2 domina S = R*Q^2*T. Se añaden 1, 2, 3.
+_DEFAULT_BATCH = (1, 2, 3, 4, 8, 17, 36)
 _DEFAULT_NSLOT_EXTRA = (0, 2, 6)
 
 # Guarda de imports (sin romper la estructura de Python).
@@ -295,7 +300,7 @@ _REPO_ESTRUCTURAS = (
     "  gf4_inv(a), to_tower(v), from_tower(c), split_tower(c).\n"
     "- auto_mvp.llm_auto_dqi: R_DQI = 1.1912605,\n"
     "  dqi_S(qubits, toffoli_like) -> float (S = R * Q^2 * T).\n"
-    "- auto_mvp.autonomous: _DEFAULT_BATCH = (4, 8, 17, 36)."
+    "- auto_mvp.autonomous: _DEFAULT_BATCH = (1, 2, 3, 4, 8, 17, 36)."
 )
 
 
@@ -384,9 +389,12 @@ def _prompt_autonomous(best: dict[str, Any],
         f"{probados}\n"
         "Propón UNA parametrización DISTINTA a todas las ya probadas "
         "como JSON: "
-        '{"batch": 4|8|17|36, "nslot": <entero>, "toom3": true|false, '
+        '{"batch": 1..64, "nslot": <entero>, "toom3": true|false, '
         '"seed": <entero>, "reason": "<una frase>"}. '
         f"nslot debe ser >= {n // 2 + 1} (si no, el circuito no cabe). "
+        "Pista medida: S = R*Q^2*T y Q^2 domina; a escala chica "
+        "un batch PEQUEÑO (1, 2, 3) baja Q y baja S aunque T suba "
+        "un poco; nslot mínimo suele ser lo mejor. "
         "No hay meta externa ni puntuación máxima: solo trata de "
         "hacerlo mejor que la mejor semilla hasta ahora. Varía batch, "
         "nslot y toom3."
@@ -446,7 +454,7 @@ def _prompt_codigo_repo(n: int, m: int, r_dqi: float,
         "kickmix. NO uses os, sys, subprocess, eval, exec, open, "
         "getattr.\n"
         "- La función recibe n y m (enteros) y devuelve un dict con "
-        "las llaves 'batch' (4|8|17|36), 'nslot' (entero) y 'toom3' "
+        "las llaves 'batch' (1..64), 'nslot' (entero) y 'toom3' "
         "(true|false). nslot debe ser >= n//2+1. Usa True/False de "
         "Python (no true/false de JSON).\n"
         "- El puntaje S es menor-mejor (S = R * Q^2 * T, "
@@ -976,8 +984,10 @@ def run_tres_tareas(llm: Any | None, n: int = 30, m: int = 255,
             b = int(knobs.get("batch", 4))
             s = int(knobs.get("nslot", min_nslot))
             t = bool(knobs.get("toom3", False))
-            # batch solo 4|8|17|36 (el más cercano); nslot >= mínimo.
-            b = min(_DEFAULT_BATCH, key=lambda x: abs(x - b))
+            # batch 1..64 (se limita al rango válido, sin forzar
+            # un valor discreto: antes se redondeaba al más cercano
+            # de (4, 8, 17, 36) y nunca se probaba batch 1, 2, 3).
+            b = max(1, min(64, b))
             s = max(s, min_nslot)
         except Exception as exc:
             t2["fallbacks"] += 1
