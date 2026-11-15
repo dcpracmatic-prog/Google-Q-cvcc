@@ -1,10 +1,26 @@
-# STATUS.md — estado del repo (v2.17.4)
+# STATUS.md — estado del repo (v2.17.5)
 
 Última actualización: 2026-11-14. Todo lo que dice aquí está
 verificado en sandbox y/o en Kaggle; lo que no, dice que no.
 
 ## Versión
 
+- **v2.17.5** (2026-11-14): pedido de Arturo (penalización de no
+  repetición + LLM que use las estructuras .py del repo + las 3
+  tareas). La v4 en Kaggle repitió la mejor semilla (la #13 era
+  idéntica a la #1, batch=4, nslot=16, toom3=true) y el reporte del
+  Notebook se cayó con KeyError en las semillas inválidas (sin
+  'qubits'). Ahora: `_NoRepetir` (seen global: knobs, códigos y
+  nslots; el prompt lleva los ya probados; si el LLM repite, se
+  cuenta `repetidas` y NO se mide); tarea código-repo (el LLM
+  escribe `novel_seed(n, m)` usando build_hybrid_bm, toom3,
+  dqi_S del repo mismo); `run_tres_tareas` (3 tareas — knobs,
+  codigo_repo, param_nueva — cada una 1 hora o 25 circuitos
+  DISTINTOS, seen compartido). La v4 en Kaggle SÍ completó
+  run_autonomous (14 semillas, 12 llamadas LLM, 0 fallbacks,
+  mejor S 1.8891e12, 19.1% mejor que la primera 2.3366e12); el
+  "error" del kernel era solo el reporte. Tests 10/10
+  (test_autonomous). Detalle en `notes/v2.17.5.md`.
 - **v2.17.4** (2026-11-14): pedido de Arturo ("soluciona y vuelve
   a probar hasta que funcione"). El circuito híbrido ya no deja
   basura en ancilla: OMG se descomputa, tmpL se limpia con iadd

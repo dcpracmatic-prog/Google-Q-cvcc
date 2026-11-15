@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 
 from auto_mvp.autonomous import (
-    LocalLLM, run_autonomous, validate_code)
+    LocalLLM, run_autonomous, run_tres_tareas, validate_code)
 
 
 class _FakeLLM:
@@ -42,6 +42,44 @@ class _FakeLLM:
                     "    return circ  # roto: circ no existe\n")
         return ("def novel_nslot(n):\n"
                 "    return n // 2 + 2\n")
+
+
+class _FakeLLMRepo:
+    """Falso v2.17.5: knobs distintos cada vez y código que USA
+    estructuras .py del repo (importa R_DQI de llm_auto_dqi)."""
+
+    _KNOBS = [(4, 6, True), (8, 7, True), (17, 8, False),
+              (36, 9, True), (4, 10, False), (8, 11, True)]
+    _SEED = [(8, 3, False), (17, 4, True), (36, 5, True),
+             (4, 6, False)]
+
+    def __init__(self) -> None:
+        self.calls_json = 0
+        self.calls_code = 0
+
+    def complete_json(self, prompt, max_tokens=512):
+        b, s, t = self._KNOBS[self.calls_json % len(self._KNOBS)]
+        self.calls_json += 1
+        return {"deltas": [
+            {"batch": b, "nslot": s, "toom3": t, "seed": 1,
+             "reason": "distinto"},
+        ]}
+
+    def complete_code(self, prompt, max_tokens=512):
+        self.calls_code += 1
+        if "novel_seed" in prompt:
+            b, off, t = self._SEED[
+                (self.calls_code - 1) % len(self._SEED)]
+            return (
+                "from auto_mvp.llm_auto_dqi import R_DQI\n"
+                "\n"
+                "def novel_seed(n, m):\n"
+                "    _ = R_DQI  # usa una estructura del repo\n"
+                f"    return {{'batch': {b}, 'nslot': n // 2 + {off}, "
+                f"'toom3': {t}}}\n")
+        # novel_nslot: nslot distinto cada vez (10, 11, 12, ...).
+        off = 5 + (self.calls_code - 1) % 4
+        return f"def novel_nslot(n):\n    return n // 2 + {off}\n"
 
 
 def test_import_autonomous_sin_kickmix():
@@ -193,3 +231,71 @@ def test_autonomous_codigo_roto_no_aborta(tmp_path):
     assert len(res["semillas"]) == 3  # 0 + 2 (sin la de novel_nslot)
     assert res["param_nueva"]["status"] == "falló"
     assert res["llm_calls"] == 2
+
+
+def test_no_repeticion_penaliza_y_no_mide_repetidas(tmp_path):
+    # v2.17.5 (pedido de Arturo; la v4 en Kaggle repitió la mejor
+    # semilla: la #13 era idéntica a la #1): el falso propone
+    # SIEMPRE los mismos knobs (4,6,True). La 1ª vez se mide; las
+    # siguientes son REPETIDAS: se cuentan y NO se miden (se busca
+    # otro). Todas las semillas medidas son distintas.
+    fake = _FakeLLM(code_ok=True)
+    res = run_autonomous(
+        fake, n=10, m=15, n_semillas=3, time_budget_seconds=300,
+        output_dir=tmp_path, seed=42, verify=True)
+    assert res["repetidas"] >= 2  # 2ª y 3ª propuesta repetidas
+    knobs = [(s["batch"], s["nslot"], s["toom3"])
+             for s in res["semillas"] if s.get("valid")]
+    assert len(knobs) == len(set(knobs))
+    assert res["unicas"] == len(set(knobs))
+    assert res["mejor"]["valid"] is True
+
+
+def test_codigo_repo_usa_estructuras_del_repo(tmp_path):
+    # v2.17.5: el código novel_seed importa una estructura .py del
+    # repo (R_DQI de llm_auto_dqi) y se ejecuta; los knobs que
+    # devuelve se miden. validate_code acepta el import de auto_mvp.
+    ok, _ = validate_code(
+        "from auto_mvp.llm_auto_dqi import R_DQI\n"
+        "\n"
+        "def novel_seed(n, m):\n"
+        "    _ = R_DQI\n"
+        "    return {'batch': 8, 'nslot': n // 2 + 3, "
+        "'toom3': False}\n",
+        entry="novel_seed")
+    assert ok is True
+    fake = _FakeLLMRepo()
+    res = run_tres_tareas(
+        fake, n=10, m=15, n_objetivo=2, time_budget_seconds=300,
+        output_dir=tmp_path, seed=42, verify=True)
+    t2 = res["tareas"]["codigo_repo"]
+    # La tarea 2 midió al menos 1 semilla desde código del repo.
+    assert len(t2["semillas"]) >= 1
+    assert all(s["origen"].startswith("codigo_repo")
+               for s in t2["semillas"])
+    assert all(s["valid"] for s in t2["semillas"])
+
+
+def test_tres_tareas_completan_sin_repetir(tmp_path):
+    # v2.17.5: las 3 tareas corren (knobs, codigo_repo,
+    # param_nueva) a escala chica (2 circuitos distintos c/u) y
+    # ninguna semilla medida se repite (el seen es global).
+    fake = _FakeLLMRepo()
+    res = run_tres_tareas(
+        fake, n=10, m=15, n_objetivo=2, time_budget_seconds=300,
+        output_dir=tmp_path, seed=42, verify=True)
+    assert set(res["tareas"].keys()) == {
+        "knobs", "codigo_repo", "param_nueva"}
+    assert len(res["tareas"]["knobs"]["semillas"]) >= 3  # 0 + 2
+    assert len(res["tareas"]["codigo_repo"]["semillas"]) >= 1
+    assert len(res["tareas"]["param_nueva"]["semillas"]) >= 1
+    # Ninguna semilla medida se repite (knobs distintos).
+    knobs = [(s["batch"], s["nslot"], s["toom3"])
+             for s in res["semillas"]
+             if s.get("valid") and "batch" in s]
+    assert len(knobs) == len(set(knobs))
+    assert res["unicas"] == len(set(knobs))
+    assert res["mejor"]["valid"] is True
+    assert (tmp_path / "tres_tareas.json").exists()
+    assert (tmp_path / "semillas.json").exists()
+    assert (tmp_path / "VEREDICTO.json").exists()

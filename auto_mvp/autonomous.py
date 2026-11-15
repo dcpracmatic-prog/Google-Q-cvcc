@@ -32,6 +32,14 @@ puntuación máxima):
    chica, no un circuito entero) y se mide una semilla con ella.
    Guarda `semillas.json` (las semillas + sus parametrizaciones),
    `param_nueva.json` y `VEREDICTO.json` en `output_dir`.
+5. `run_tres_tareas` (v2.17.5): las 3 tareas de generación, cada
+   una ~1 hora o 25 circuitos DIFERENTES (lo que llegue primero),
+   con penalización de no repetición global (el `seen` se
+   comparte): (1) knobs (batch/nslot/toom3), (2) código del repo
+   (el LLM escribe `novel_seed(n, m)` usando las estructuras .py
+   del repo mismo: build_hybrid_bm, toom3, dqi_S), (3) param nueva
+   (`novel_nslot(n)` en bucle, cada una con un nslot distinto).
+   Guarda `tres_tareas.json` + `semillas.json` + `VEREDICTO.json`.
 
 Uso desde el Notebook (delgado, 2 celdas de código)::
 
@@ -52,6 +60,7 @@ la corrida nunca depende del modelo; el modelo solo la guía.
 from __future__ import annotations
 
 import ast
+import hashlib
 import importlib.util
 import json
 import re
@@ -271,19 +280,97 @@ def setup_kaggle(input_dir: str | Path = "/kaggle/input") -> Path | None:
     return comp
 
 
+# Estructuras .py del repo que el LLM puede usar para proponer una
+# semilla nueva (tarea código-repo, v2.17.5). Se le dan en el prompt
+# para que su función novel_seed(n, m) las importe y las use.
+_REPO_ESTRUCTURAS = (
+    "- auto_mvp.circuits.generators.build_hybrid_bm:\n"
+    "  build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,\n"
+    "  nslot=None, toom3=False) -> (circ, info): construye el\n"
+    "  circuito híbrido (medición + descomputación clásica).\n"
+    "  verify_small(n=10, m=15, batch=4, seed=12345, nshots=4,\n"
+    "  toom3=False): simula y verifica (bm_sigma + scan).\n"
+    "- auto_mvp.circuits.generators.toom3: FIELD12 = km.GF2Field(12),\n"
+    "  FIELD4 = km.GF2Field(4), gf4_mul(a, b), gf4_pow(a, e),\n"
+    "  gf4_inv(a), to_tower(v), from_tower(c), split_tower(c).\n"
+    "- auto_mvp.llm_auto_dqi: R_DQI = 1.1912605,\n"
+    "  dqi_S(qubits, toffoli_like) -> float (S = R * Q^2 * T).\n"
+    "- auto_mvp.autonomous: _DEFAULT_BATCH = (4, 8, 17, 36)."
+)
+
+
+class _NoRepetir:
+    """Penalización de no repetición de semillas (v2.17.5, pedido de
+    Arturo; la v4 en Kaggle repitió la mejor semilla: la #13 era
+    idéntica a la #1, batch=4, nslot=16, toom3=True).
+
+    Una semilla se identifica por sus knobs (batch, nslot, toom3)
+    y, para las de código, por el hash del código. Si el LLM propone
+    una ya probada, es REPETIDA: se cuenta la penalización y NO se
+    mide (no se gasta tiempo en un circuito que ya se conoce).
+    El `seen` es global a toda la corrida (las 3 tareas comparten
+    el mismo: lo probado en una tarea no se repite en otra).
+    """
+
+    def __init__(self) -> None:
+        self.knobs: set[tuple[int, int, bool]] = set()
+        self.codigos: set[str] = set()
+        self.nslots: set[int] = set()
+        self.repetidas = 0
+
+    def knob_repetido(self, batch: int, nslot: int, toom3: bool) -> bool:
+        return (int(batch), int(nslot), bool(toom3)) in self.knobs
+
+    def registrar_knob(self, batch: int, nslot: int,
+                       toom3: bool) -> None:
+        self.knobs.add((int(batch), int(nslot), bool(toom3)))
+
+    def codigo_repetido(self, code: str) -> bool:
+        h = hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
+        return h in self.codigos
+
+    def registrar_codigo(self, code: str) -> None:
+        h = hashlib.sha256(code.strip().encode("utf-8")).hexdigest()
+        self.codigos.add(h)
+
+    def nslot_repetido(self, nslot: int) -> bool:
+        return int(nslot) in self.nslots
+
+    def registrar_nslot(self, nslot: int) -> None:
+        self.nslots.add(int(nslot))
+
+    def resumen(self) -> dict[str, Any]:
+        return {"knobs_probados": len(self.knobs),
+                "codigos_probados": len(self.codigos),
+                "nslots_probados": len(self.nslots),
+                "repetidas_penalizadas": self.repetidas}
+
+
 def _prompt_autonomous(best: dict[str, Any],
                        history: list[dict[str, Any]],
-                       n: int, m: int, r_dqi: float) -> str:
+                       n: int, m: int, r_dqi: float,
+                       ya_probados: list[tuple[int, int, bool]]
+                       | None = None) -> str:
     """El prompt del estratega autónomo: propone UNA parametrización.
 
     Sin meta externa ni puntuación máxima: solo tratar de hacerlo
-    mejor que la mejor semilla hasta ahora.
+    mejor que la mejor semilla hasta ahora. Con penalización de no
+    repetición (v2.17.5): se le dan los knobs ya probados para que
+    NO los repita.
     """
     hist = "\n".join(
         f"- semilla {h.get('semilla')}: batch={h.get('batch')}, "
         f"nslot={h.get('nslot')}, toom3={h.get('toom3')}: "
         f"{'S=' + str(h.get('S')) if h.get('valid') else 'inválida'}"
         for h in history[-8:])
+    probados = ""
+    if ya_probados:
+        lista = ", ".join(
+            f"(batch={b}, nslot={s}, toom3={str(t).lower()})"
+            for b, s, t in ya_probados[-12:])
+        probados = (
+            "\n\nYA PROBADOS (NO los repitas: repetir una semilla "
+            "cuesta una penalización y no se mide):\n" + lista + "\n")
     return (
         "Eres el estratega de un generador autónomo de circuitos "
         "cuánticos (decodificador DQI híbrido). Responde SOLO con un "
@@ -293,8 +380,10 @@ def _prompt_autonomous(best: dict[str, Any],
         "mejor semilla hasta ahora es:\n"
         f"{json.dumps(best, ensure_ascii=False)}\n\n"
         "Lo ya generado:\n"
-        f"{hist or '- nada todavía'}\n\n"
-        "Propón UNA parametrización distinta como JSON: "
+        f"{hist or '- nada todavía'}"
+        f"{probados}\n"
+        "Propón UNA parametrización DISTINTA a todas las ya probadas "
+        "como JSON: "
         '{"batch": 4|8|17|36, "nslot": <entero>, "toom3": true|false, '
         '"seed": <entero>, "reason": "<una frase>"}. '
         f"nslot debe ser >= {n // 2 + 1} (si no, el circuito no cabe). "
@@ -327,6 +416,50 @@ def _prompt_novel_nslot(n: int) -> str:
     )
 
 
+def _prompt_codigo_repo(n: int, m: int, r_dqi: float,
+                        ya_probados: list[tuple[int, int, bool]]
+                        | None = None) -> str:
+    """El prompt de la tarea código-repo (v2.17.5): el LLM escribe
+    UNA función `novel_seed(n, m)` que USA las estructuras .py del
+    repositorio mismo (no solo una fórmula). Devuelve los knobs
+    (batch, nslot, toom3) calculados por ese código.
+    """
+    probados = ""
+    if ya_probados:
+        lista = ", ".join(
+            f"(batch={b}, nslot={s}, toom3={str(t).lower()})"
+            for b, s, t in ya_probados[-12:])
+        probados = (
+            "\n\nYA PROBADOS (los knobs que devuelvas deben ser "
+            "DISTINTOS a todos estos; repetir cuesta una "
+            "penalización y no se mide):\n" + lista + "\n")
+    return (
+        "Escribe UNA función Python llamada novel_seed(n, m) que "
+        "devuelva los knobs de una semilla nueva de un decodificador "
+        "DQI híbrido (n registros, m síndromes).\n\n"
+        "USA las estructuras de código .py del repositorio mismo "
+        "(impórtalas y úsalas para calcular los knobs, no solo una "
+        "fórmula a mano):\n"
+        f"{_REPO_ESTRUCTURAS}\n"
+        "Reglas:\n"
+        "- Solo puedes importar math, typing, dataclasses, auto_mvp, "
+        "kickmix. NO uses os, sys, subprocess, eval, exec, open, "
+        "getattr.\n"
+        "- La función recibe n y m (enteros) y devuelve un dict con "
+        "las llaves 'batch' (4|8|17|36), 'nslot' (entero) y 'toom3' "
+        "(true|false). nslot debe ser >= n//2+1. Usa True/False de "
+        "Python (no true/false de JSON).\n"
+        "- El puntaje S es menor-mejor (S = R * Q^2 * T, "
+        f"R={r_dqi}). No hay meta externa ni puntuación máxima: solo "
+        "trata de hacerlo mejor que la mejor semilla hasta ahora.\n"
+        "- Escribe SOLO la función, completa y funcional, sin "
+        "comentarios de relleno ni '...' ni 'pass'."
+        f"{probados}\n"
+        "Responde SOLO con un bloque ```python con la función. Sin "
+        "texto fuera del bloque."
+    )
+
+
 def _default_delta(round_no: int, min_nslot: int,
                    seed: int) -> dict[str, Any]:
     """Knobs por defecto (sin modelo): batch/nslot rotando, toom3
@@ -342,12 +475,38 @@ def _default_delta(round_no: int, min_nslot: int,
     }
 
 
+def _default_delta_no_repetido(round_no: int, min_nslot: int,
+                               seed: int,
+                               tracker: _NoRepetir) -> dict[str, Any]:
+    """Knobs por defecto que NO repiten ninguno ya probado: rota
+    por los defaults y, si todos están usados, varía nslot."""
+    for k in range(int(round_no), int(round_no) + 60):
+        d = _default_delta(k, min_nslot, seed)
+        if not tracker.knob_repetido(d["batch"], d["nslot"],
+                                     d["toom3"]):
+            return d
+    # Todos los defaults están usados: nslot nuevo, batch rotando.
+    base = _default_delta(round_no, min_nslot, seed)
+    extra = 1
+    while True:
+        ns = int(min_nslot) + extra
+        if not tracker.knob_repetido(base["batch"], ns,
+                                     base["toom3"]):
+            out = dict(base)
+            out["nslot"] = ns
+            out["reason"] = "sin modelo: nslot nuevo (defaults agotados)"
+            return out
+        extra += 1
+
+
 def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
                    n_semillas: int = 12,
                    time_budget_seconds: float | None = 1200,
                    output_dir: str | Path | None = None,
                    seed: int = 42, verify: bool = True,
-                   on_seed: Callable[[dict[str, Any]], None] | None = None
+                   on_seed: Callable[[dict[str, Any]], None] | None = None,
+                   tracker: _NoRepetir | None = None,
+                   con_param_nueva: bool = True
                    ) -> dict[str, Any]:
     """Generación AUTÓNOMA de semillas de circuitos (desde el repo).
 
@@ -368,10 +527,17 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     dónde se quedó la corrida si el kernel muere (Kaggle no da el
     mensaje de error).
 
-    Devuelve {n, m, R, llm_calls, llm_fallbacks, mejor, semillas,
-    param_nueva}. Si `output_dir` se da, guarda `semillas.json`
-    (las semillas + sus parametrizaciones), `param_nueva.json` y
-    `VEREDICTO.json` ahí.
+    Penalización de no repetición (v2.17.5, pedido de Arturo):
+    ninguna semilla se repite. Los knobs ya probados se le dan al
+    LLM en el prompt y, si aun así propone uno repetido, se cuenta
+    la penalización (`repetidas`) y NO se mide (se busca otro).
+    El resultado trae `repetidas` y `unicas` (circuitos distintos
+    medidos).
+
+    Devuelve {n, m, R, llm_calls, llm_fallbacks, invalid,
+    repetidas, unicas, mejor, semillas, param_nueva}. Si
+    `output_dir` se da, guarda `semillas.json` (las semillas + sus
+    parametrizaciones), `param_nueva.json` y `VEREDICTO.json` ahí.
     """
     if n < 2 or m < 1:
         raise ValueError(f"n={n}, m={m} inválidos")
@@ -381,6 +547,11 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     # falla si kickmix todavía es el paquete VACÍO de Kaggle. Por
     # eso se importa AQUÍ, después de `setup_kaggle()`.
     from .llm_auto_dqi import R_DQI, _measure_knobs, _parse_deltas
+
+    if tracker is None:
+        tracker = _NoRepetir()
+    # `con_param_nueva=False` lo usa run_tres_tareas (la tarea 3
+    # hace la parametrización nueva en bucle, no una sola aquí).
 
     out_dir = Path(output_dir) if output_dir is not None else None
     if out_dir is not None:
@@ -428,6 +599,7 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
         raise RuntimeError(
             "la primera semilla no se pudo medir o no es válida: "
             f"{(primera or {}).get('reason', '')}")
+    tracker.registrar_knob(4, min_nslot, False)
     primera.update({"semilla": 0,
                     "origen": "primera generada (sin base)",
                     "mejora": False})
@@ -452,15 +624,30 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
             if llm is None:
                 raise LLMError("sin modelo", no_key=True)
             raw = llm.complete_json(
-                _prompt_autonomous(mejor, semillas, n, m, R_DQI),
+                _prompt_autonomous(mejor, semillas, n, m, R_DQI,
+                                   ya_probados=sorted(tracker.knobs)),
                 max_tokens=512)
             delta = _parse_deltas(raw, min_nslot)[0]
             llm_ok = True
             llm_calls += 1
         except (LLMError, ValueError, KeyError, TypeError) as exc:
             llm_error = str(exc)[:200]
-            delta = _default_delta(i, min_nslot, seed)
+            delta = _default_delta_no_repetido(i, min_nslot, seed,
+                                               tracker)
             llm_fallbacks += 1
+        # Penalización de no repetición (v2.17.5): si el LLM propone
+        # knobs ya probados, se cuenta y NO se mide; se busca otro.
+        if tracker.knob_repetido(delta["batch"], delta["nslot"],
+                                 delta["toom3"]):
+            tracker.repetidas += 1
+            _log_progreso(
+                f"semilla {i}: REPETIDA "
+                f"(batch={delta['batch']}, nslot={delta['nslot']}, "
+                f"toom3={delta['toom3']}): penalización, no se mide")
+            delta = _default_delta_no_repetido(i, min_nslot, seed,
+                                               tracker)
+        tracker.registrar_knob(delta["batch"], delta["nslot"],
+                               delta["toom3"])
         entry = _medir_seguro(delta["batch"], delta["nslot"],
                               delta["toom3"], i)
         if entry is None:
@@ -499,61 +686,98 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     # (una función chica). Con guarda de imports; si falla, se
     # registra y se sigue (nunca aborta la corrida).
     param_nueva: dict[str, Any] = {"status": "no intentado"}
-    try:
-        if llm is None or not hasattr(llm, "complete_code"):
-            raise LLMError("sin generador de código", no_key=True)
-        code = llm.complete_code(_prompt_novel_nslot(n), max_tokens=512)
-        ok, reason = validate_code(code, entry="novel_nslot")
-        param_nueva.update({"guard_ok": bool(ok),
-                            "guard_reason": reason,
-                            "code_chars": len(code)})
-        if not ok:
-            param_nueva["status"] = "rechazado por la guarda"
-        else:
-            tmp = Path(output_dir) / "novel_nslot.py" \
-                if output_dir is not None else Path("novel_nslot.py")
-            tmp.write_text(code, encoding="utf-8")
-            spec = importlib.util.spec_from_file_location(
-                "novel_nslot", tmp)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-            ns = mod.novel_nslot(n)
-            if not isinstance(ns, int) or ns < min_nslot:
-                raise ValueError(
-                    f"novel_nslot devolvió {ns!r}, inválido "
-                    f"(< {min_nslot} o no entero)")
-            entry = _medir_seguro(mejor["batch"], int(ns),
-                                  mejor["toom3"], len(semillas))
-            if entry is None:
-                param_nueva.update({"status": "falló",
-                                    "error": "la medición de la semilla "
-                                             "con novel_nslot falló"})
-                _log_progreso("parametrización nueva: medición falló")
+    if con_param_nueva:
+        try:
+            if llm is None or not hasattr(llm, "complete_code"):
+                raise LLMError("sin generador de código", no_key=True)
+            code = llm.complete_code(_prompt_novel_nslot(n), max_tokens=512)
+            ok, reason = validate_code(code, entry="novel_nslot")
+            param_nueva.update({"guard_ok": bool(ok),
+                                "guard_reason": reason,
+                                "code_chars": len(code)})
+            if not ok:
+                param_nueva["status"] = "rechazado por la guarda"
             else:
-                entry.update({"semilla": len(semillas),
-                              "origen": "parametrización nueva (novel_nslot)",
-                              "mejora": bool(entry["valid"]
-                                             and entry["S"] < best_S)})
-                if entry["mejora"]:
-                    best_S = float(entry["S"])
-                    mejor = dict(entry)
-                semillas.append(entry)
-                param_nueva.update({"status": "medido", "nslot": int(ns),
-                                    "Q": entry["qubits"],
-                                    "T": entry["toffoli_like"],
-                                    "S": entry["S"], "valid": entry["valid"],
-                                    "mejora": entry["mejora"]})
-                _progress(entry)
-    except Exception as exc:
-        param_nueva.update({"status": "falló",
-                            "error": str(exc)[:300]})
-        _progress({"note": "parametrización nueva falló",
-                   "error": str(exc)[:200]})
+                tmp = Path(output_dir) / "novel_nslot.py" \
+                    if output_dir is not None else Path("novel_nslot.py")
+                tmp.write_text(code, encoding="utf-8")
+                spec = importlib.util.spec_from_file_location(
+                    "novel_nslot", tmp)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                ns = mod.novel_nslot(n)
+                if not isinstance(ns, int) or ns < min_nslot:
+                    raise ValueError(
+                        f"novel_nslot devolvió {ns!r}, inválido "
+                        f"(< {min_nslot} o no entero)")
+                # Penalización de no repetición (v2.17.5): si el nslot
+                # ya se probó, no se mide (es repetido, no un fallo).
+                if tracker.nslot_repetido(ns):
+                    tracker.repetidas += 1
+                    param_nueva.update(
+                        {"status": "repetido",
+                         "nslot": int(ns),
+                         "error": "nslot ya probado: penalización, "
+                                  "no se mide"})
+                    _log_progreso(
+                        f"parametrización nueva: nslot={ns} REPETIDO")
+                else:
+                    tracker.registrar_nslot(ns)
+                    # La semilla es (mejor batch, ns, mejor toom3):
+                    # se registra el knob completo (si ya se probó,
+                    # es repetida aunque el nslot sea nuevo).
+                    if tracker.knob_repetido(mejor["batch"], int(ns),
+                                             mejor["toom3"]):
+                        tracker.repetidas += 1
+                        param_nueva.update(
+                            {"status": "repetido",
+                             "nslot": int(ns),
+                             "error": "knobs ya probados: penalización"})
+                        _log_progreso(
+                            "parametrización nueva: knobs REPETIDOS")
+                    else:
+                        tracker.registrar_knob(mejor["batch"], int(ns),
+                                               mejor["toom3"])
+                        entry = _medir_seguro(mejor["batch"], int(ns),
+                                              mejor["toom3"],
+                                              len(semillas))
+                        if entry is None:
+                            param_nueva.update(
+                                {"status": "falló",
+                                 "error": "la medición de la semilla "
+                                          "con novel_nslot falló"})
+                            _log_progreso(
+                                "parametrización nueva: medición falló")
+                        else:
+                            entry.update(
+                                {"semilla": len(semillas),
+                                 "origen": "parametrización nueva "
+                                           "(novel_nslot)",
+                                 "mejora": bool(entry["valid"]
+                                                and entry["S"] < best_S)})
+                            if entry["mejora"]:
+                                best_S = float(entry["S"])
+                                mejor = dict(entry)
+                            semillas.append(entry)
+                            param_nueva.update(
+                                {"status": "medido", "nslot": int(ns),
+                                 "Q": entry["qubits"],
+                                 "T": entry["toffoli_like"],
+                                 "S": entry["S"], "valid": entry["valid"],
+                                 "mejora": entry["mejora"]})
+                            _progress(entry)
+        except Exception as exc:
+            param_nueva.update({"status": "falló",
+                                "error": str(exc)[:300]})
+            _progress({"note": "parametrización nueva falló",
+               "error": str(exc)[:200]})
 
     result: dict[str, Any] = {
         "n": int(n), "m": int(m), "R": R_DQI,
         "llm_calls": llm_calls, "llm_fallbacks": llm_fallbacks,
         "invalid": invalid,
+        "repetidas": tracker.repetidas,
+        "unicas": len(tracker.knobs),
         "mejor": mejor, "semillas": semillas,
         "param_nueva": param_nueva,
     }
@@ -571,6 +795,8 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
             "llm_calls": llm_calls,
             "llm_fallbacks": llm_fallbacks,
             "invalid": invalid,
+            "repetidas": tracker.repetidas,
+            "unicas": len(tracker.knobs),
             "mejor_semilla": mejor,
             "primera_semilla_S": semillas[0]["S"],
             "mejora_interna_ratio": semillas[0]["S"] / mejor["S"],
@@ -581,8 +807,355 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
     return result
 
 
+def run_tres_tareas(llm: Any | None, n: int = 30, m: int = 255,
+                    n_objetivo: int = 25,
+                    time_budget_seconds: float | None = 3600,
+                    output_dir: str | Path | None = None,
+                    seed: int = 42, verify: bool = True,
+                    on_seed: Callable[[dict[str, Any]], None] | None = None
+                    ) -> dict[str, Any]:
+    """Las 3 tareas de generación autónoma (v2.17.5, pedido de
+    Arturo): cada tarea corre ~1 hora o 25 circuitos DIFERENTES
+    (lo que llegue primero), con penalización de no repetición
+    global (el `seen` se comparte: lo probado en una tarea no se
+    repite en otra).
+
+    - Tarea 1 "knobs": el LLM propone (batch, nslot, toom3)
+      (run_autonomous, sin la param nueva suelta).
+    - Tarea 2 "codigo_repo": el LLM escribe `novel_seed(n, m)` que
+      USA las estructuras .py del repo mismo (build_hybrid_bm,
+      toom3, dqi_S) para calcular los knobs.
+    - Tarea 3 "param_nueva": el LLM escribe `novel_nslot(n)` en
+      bucle, cada una con un nslot distinto.
+
+    Sin modelo, las 3 usan knobs por defecto (la corrida nunca
+    depende del modelo). Devuelve {n, m, R, tareas: {knobs,
+    codigo_repo, param_nueva}, mejor, semillas, repetidas,
+    unicas}. Guarda `tres_tareas.json` en output_dir.
+    """
+    if n < 2 or m < 1:
+        raise ValueError(f"n={n}, m={m} inválidos")
+    min_nslot = (n // 2) + 1
+    from .llm_auto_dqi import R_DQI, _measure_knobs, _parse_deltas
+
+    tracker = _NoRepetir()
+    out_dir = Path(output_dir) if output_dir is not None else None
+    if out_dir is not None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+    started_all = time.monotonic()
+    semillas: list[dict[str, Any]] = []
+    llm_calls = 0
+    llm_fallbacks = 0
+    invalid = 0
+
+    def _log(msg: str) -> None:
+        line = f"[3 tareas] {msg}"
+        print(line, file=sys.stderr, flush=True)
+        if out_dir is not None:
+            with open(out_dir / "progreso.txt", "a",
+                      encoding="utf-8") as _fh:
+                _fh.write(line + "\n")
+
+    def _progress(entry: dict[str, Any]) -> None:
+        _log(json.dumps(entry, ensure_ascii=False, default=str))
+        if on_seed is not None:
+            on_seed(entry)
+
+    def _medir(batch: int, nslot: int, toom3: bool,
+               seed_i: int) -> dict[str, Any] | None:
+        try:
+            return _measure_knobs(n, m, int(batch), int(nslot),
+                                  bool(toom3), verify=verify)
+        except Exception as exc:
+            _log(f"semilla {seed_i} (batch={batch}, nslot={nslot}, "
+                 f"toom3={toom3}): MEDICIÓN FALLÓ: "
+                 f"{type(exc).__name__}: {str(exc)[:200]}")
+            return None
+
+    def _anotar(entry: dict[str, Any], mejor: dict[str, Any],
+                best_S: float) -> tuple[dict[str, Any], float, bool]:
+        """Anota una semilla medida: actualiza mejor si baja el S.
+        Devuelve (mejor, best_S, es_mejora)."""
+        if not entry["valid"]:
+            entry["mejora"] = False
+            entry["note"] = "INVÁLIDA: no cuenta"
+            return mejor, best_S, False
+        if entry["S"] < best_S:
+            entry["mejora"] = True
+            entry["note"] = "MEJORA: nueva mejor semilla"
+            return dict(entry), float(entry["S"]), True
+        entry["mejora"] = False
+        entry["note"] = "válida pero no mejora"
+        return mejor, best_S, False
+
+    # --- Tarea 1: knobs (run_autonomous, sin param nueva suelta).
+    _log("tarea 1/3 (knobs): el LLM propone batch/nslot/toom3")
+    res1 = run_autonomous(
+        llm, n=n, m=m, n_semillas=int(n_objetivo),
+        time_budget_seconds=time_budget_seconds,
+        output_dir=(out_dir / "tarea1_knobs") if out_dir else None,
+        seed=seed, verify=verify, on_seed=on_seed, tracker=tracker,
+        con_param_nueva=False)
+    semillas.extend(res1["semillas"])
+    llm_calls += res1["llm_calls"]
+    llm_fallbacks += res1["llm_fallbacks"]
+    invalid += res1["invalid"]
+    mejor = dict(res1["mejor"])
+    best_S = float(res1["mejor"]["S"])
+    _log(f"tarea 1/3 lista: {len(res1['semillas'])} semillas, "
+         f"mejor S={best_S:.4e}, repetidas={tracker.repetidas}")
+
+    # --- Tarea 2: código del repo (novel_seed usa estructuras .py).
+    _log("tarea 2/3 (codigo_repo): el LLM escribe novel_seed(n, m) "
+         "usando las estructuras .py del repo")
+    t2: dict[str, Any] = {"tarea": "codigo_repo", "semillas": [],
+                          "llm_calls": 0, "fallbacks": 0,
+                          "invalid": 0, "repetidas": 0}
+    started2 = time.monotonic()
+    intentos2 = 0
+    while (len(t2["semillas"]) < int(n_objetivo)
+           and (time_budget_seconds is None
+                or time.monotonic() - started2
+                < float(time_budget_seconds))):
+        intentos2 += 1
+        if intentos2 > int(n_objetivo) * 4 + 10:
+            break
+        try:
+            if llm is None or not hasattr(llm, "complete_code"):
+                raise LLMError("sin generador de código", no_key=True)
+            code = llm.complete_code(
+                _prompt_codigo_repo(n, m, R_DQI,
+                                    ya_probados=sorted(tracker.knobs)),
+                max_tokens=1024)
+            t2["llm_calls"] += 1
+            llm_calls += 1
+        except Exception as exc:
+            t2["fallbacks"] += 1
+            llm_fallbacks += 1
+            _log(f"tarea 2: el LLM no dio código ({str(exc)[:120]}); "
+                 "se sigue con knobs por defecto")
+            d = _default_delta_no_repetido(intentos2, min_nslot,
+                                           seed, tracker)
+            tracker.registrar_knob(d["batch"], d["nslot"], d["toom3"])
+            entry = _medir(d["batch"], d["nslot"], d["toom3"],
+                           len(semillas))
+            if entry is None:
+                invalid += 1
+                t2["invalid"] += 1
+                continue
+            entry.update({"semilla": len(semillas),
+                          "origen": "codigo_repo (por defecto)",
+                          "reason_llm": d.get("reason", "")})
+            mejor, best_S, _ = _anotar(entry, mejor, best_S)
+            semillas.append(entry)
+            t2["semillas"].append(entry)
+            _progress(entry)
+            continue
+        ok, reason = validate_code(code, entry="novel_seed")
+        if not ok:
+            t2["fallbacks"] += 1
+            _log(f"tarea 2: código rechazado por la guarda: {reason}")
+            continue
+        if tracker.codigo_repetido(code):
+            tracker.repetidas += 1
+            t2["repetidas"] += 1
+            _log("tarea 2: código REPETIDO: penalización, no se mide")
+            continue
+        tracker.registrar_codigo(code)
+        try:
+            tmp = (out_dir / "novel_seed.py") if out_dir else Path(
+                "novel_seed.py")
+            tmp.write_text(code, encoding="utf-8")
+            spec = importlib.util.spec_from_file_location(
+                "novel_seed", tmp)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            knobs = mod.novel_seed(n, m)
+            if not isinstance(knobs, dict):
+                raise ValueError("novel_seed no devolvió un dict")
+            b = int(knobs.get("batch", 4))
+            s = int(knobs.get("nslot", min_nslot))
+            t = bool(knobs.get("toom3", False))
+            # batch solo 4|8|17|36 (el más cercano); nslot >= mínimo.
+            b = min(_DEFAULT_BATCH, key=lambda x: abs(x - b))
+            s = max(s, min_nslot)
+        except Exception as exc:
+            t2["fallbacks"] += 1
+            _log(f"tarea 2: novel_seed no se pudo ejecutar: "
+                 f"{str(exc)[:150]}")
+            continue
+        if tracker.knob_repetido(b, s, t):
+            tracker.repetidas += 1
+            t2["repetidas"] += 1
+            _log(f"tarea 2: knobs REPETIDOS (batch={b}, nslot={s}, "
+                 f"toom3={t}): penalización, no se mide")
+            continue
+        tracker.registrar_knob(b, s, t)
+        entry = _medir(b, s, t, len(semillas))
+        if entry is None:
+            invalid += 1
+            t2["invalid"] += 1
+            continue
+        entry.update({"semilla": len(semillas),
+                      "origen": "codigo_repo (novel_seed)",
+                      "codigo": code[:400]})
+        mejor, best_S, _ = _anotar(entry, mejor, best_S)
+        semillas.append(entry)
+        t2["semillas"].append(entry)
+        _progress(entry)
+    _log(f"tarea 2/3 lista: {len(t2['semillas'])} semillas nuevas, "
+         f"mejor S={best_S:.4e}, repetidas={tracker.repetidas}")
+
+    # --- Tarea 3: parametrización nueva en bucle (novel_nslot).
+    _log("tarea 3/3 (param_nueva): el LLM escribe novel_nslot(n) "
+         "en bucle, cada una con un nslot distinto")
+    t3: dict[str, Any] = {"tarea": "param_nueva", "semillas": [],
+                          "llm_calls": 0, "fallbacks": 0,
+                          "invalid": 0, "repetidas": 0}
+    started3 = time.monotonic()
+    intentos3 = 0
+    while (len(t3["semillas"]) < int(n_objetivo)
+           and (time_budget_seconds is None
+                or time.monotonic() - started3
+                < float(time_budget_seconds))):
+        intentos3 += 1
+        if intentos3 > int(n_objetivo) * 4 + 10:
+            break
+        try:
+            if llm is None or not hasattr(llm, "complete_code"):
+                raise LLMError("sin generador de código", no_key=True)
+            code = llm.complete_code(_prompt_novel_nslot(n),
+                                     max_tokens=512)
+            t3["llm_calls"] += 1
+            llm_calls += 1
+        except Exception as exc:
+            t3["fallbacks"] += 1
+            llm_fallbacks += 1
+            _log(f"tarea 3: el LLM no dio código ({str(exc)[:120]}); "
+                 "se sigue con nslot por defecto")
+            ns = min_nslot + len(t3["semillas"])
+            if tracker.nslot_repetido(ns):
+                continue
+            if tracker.knob_repetido(mejor["batch"], ns,
+                                     mejor["toom3"]):
+                tracker.repetidas += 1
+                t3["repetidas"] += 1
+                continue
+            tracker.registrar_nslot(ns)
+            tracker.registrar_knob(mejor["batch"], ns, mejor["toom3"])
+            entry = _medir(mejor["batch"], ns, mejor["toom3"],
+                           len(semillas))
+            if entry is None:
+                invalid += 1
+                t3["invalid"] += 1
+                continue
+            entry.update({"semilla": len(semillas),
+                          "origen": "param_nueva (por defecto)"})
+            mejor, best_S, _ = _anotar(entry, mejor, best_S)
+            semillas.append(entry)
+            t3["semillas"].append(entry)
+            _progress(entry)
+            continue
+        ok, reason = validate_code(code, entry="novel_nslot")
+        if not ok:
+            t3["fallbacks"] += 1
+            _log(f"tarea 3: código rechazado por la guarda: {reason}")
+            continue
+        if tracker.codigo_repetido(code):
+            tracker.repetidas += 1
+            t3["repetidas"] += 1
+            _log("tarea 3: código REPETIDO: penalización, no se mide")
+            continue
+        tracker.registrar_codigo(code)
+        try:
+            tmp = (out_dir / "novel_nslot.py") if out_dir else Path(
+                "novel_nslot.py")
+            tmp.write_text(code, encoding="utf-8")
+            spec = importlib.util.spec_from_file_location(
+                "novel_nslot", tmp)
+            mod = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(mod)
+            ns = mod.novel_nslot(n)
+            if not isinstance(ns, int) or ns < min_nslot:
+                raise ValueError(f"novel_nslot devolvió {ns!r}")
+        except Exception as exc:
+            t3["fallbacks"] += 1
+            _log(f"tarea 3: novel_nslot no se pudo ejecutar: "
+                 f"{str(exc)[:150]}")
+            continue
+        if tracker.nslot_repetido(ns):
+            tracker.repetidas += 1
+            t3["repetidas"] += 1
+            _log(f"tarea 3: nslot={ns} REPETIDO: penalización")
+            continue
+        if tracker.knob_repetido(mejor["batch"], ns, mejor["toom3"]):
+            tracker.repetidas += 1
+            t3["repetidas"] += 1
+            _log("tarea 3: knobs REPETIDOS: penalización")
+            continue
+        tracker.registrar_nslot(ns)
+        tracker.registrar_knob(mejor["batch"], ns, mejor["toom3"])
+        entry = _medir(mejor["batch"], ns, mejor["toom3"],
+                       len(semillas))
+        if entry is None:
+            invalid += 1
+            t3["invalid"] += 1
+            continue
+        entry.update({"semilla": len(semillas),
+                      "origen": "param_nueva (novel_nslot)",
+                      "codigo": code[:400]})
+        mejor, best_S, _ = _anotar(entry, mejor, best_S)
+        semillas.append(entry)
+        t3["semillas"].append(entry)
+        _progress(entry)
+    _log(f"tarea 3/3 lista: {len(t3['semillas'])} semillas nuevas, "
+         f"mejor S={best_S:.4e}, repetidas={tracker.repetidas}")
+
+    result: dict[str, Any] = {
+        "n": int(n), "m": int(m), "R": R_DQI,
+        "n_objetivo_por_tarea": int(n_objetivo),
+        "time_budget_por_tarea_s": time_budget_seconds,
+        "llm_calls": llm_calls, "llm_fallbacks": llm_fallbacks,
+        "invalid": invalid,
+        "repetidas": tracker.repetidas,
+        "unicas": len(tracker.knobs),
+        "mejor": mejor, "semillas": semillas,
+        "tareas": {"knobs": res1, "codigo_repo": t2,
+                   "param_nueva": t3},
+        "tiempo_total_s": round(time.monotonic() - started_all, 1),
+    }
+    if out_dir is not None:
+        (out_dir / "tres_tareas.json").write_text(
+            json.dumps(result, indent=2, default=str))
+        (out_dir / "semillas.json").write_text(
+            json.dumps(result, indent=2, default=str))
+        veredicto = {
+            "repo": "https://github.com/dcpracmatic-prog/"
+                    "Google-Q-cvcc.git",
+            "n_semillas": len(semillas),
+            "llm": "Qwen2.5-Coder-1.5B-Instruct Q4_K_M, temp 0.7, "
+                   "local en Kaggle, sin Gemini/Groq",
+            "llm_calls": llm_calls,
+            "llm_fallbacks": llm_fallbacks,
+            "invalid": invalid,
+            "repetidas": tracker.repetidas,
+            "unicas": len(tracker.knobs),
+            "mejor_semilla": mejor,
+            "primera_semilla_S": semillas[0]["S"],
+            "mejora_interna_ratio": semillas[0]["S"] / mejor["S"],
+            "por_tarea": {k: len(v["semillas"])
+                          for k, v in result["tareas"].items()},
+            "semillas": semillas,
+        }
+        (out_dir / "VEREDICTO.json").write_text(
+            json.dumps(veredicto, indent=2, default=str))
+    return result
+
+
 def main(argv: list[str] | None = None) -> int:
-    """CLI: python -m auto_mvp.autonomous --model <gguf> ..."""
+    """CLI: python -m auto_mvp.autonomous --model <gguf> ...
+    Con --tres-tareas corre las 3 tareas (knobs, codigo_repo,
+    param_nueva), 1 hora o 25 circuitos distintos c/u."""
     import argparse
 
     ap = argparse.ArgumentParser(
@@ -594,17 +1167,30 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--n", type=int, default=30)
     ap.add_argument("--m", type=int, default=255)
     ap.add_argument("--n-semillas", type=int, default=12)
+    ap.add_argument("--n-objetivo", type=int, default=25,
+                    help="circuitos distintos por tarea "
+                         "(solo --tres-tareas)")
+    ap.add_argument("--tres-tareas", action="store_true",
+                    help="corre las 3 tareas (knobs, codigo_repo, "
+                         "param_nueva)")
     ap.add_argument("--time-budget-s", type=float, default=1200)
     ap.add_argument("--output-dir", type=str, default=".")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--no-verify", action="store_true")
     args = ap.parse_args(argv)
     llm = LocalLLM(model_path=args.model) if args.model else None
-    res = run_autonomous(
-        llm, n=args.n, m=args.m, n_semillas=args.n_semillas,
-        time_budget_seconds=args.time_budget_s,
-        output_dir=args.output_dir, seed=args.seed,
-        verify=not args.no_verify)
+    if args.tres_tareas:
+        res = run_tres_tareas(
+            llm, n=args.n, m=args.m, n_objetivo=args.n_objetivo,
+            time_budget_seconds=args.time_budget_s,
+            output_dir=args.output_dir, seed=args.seed,
+            verify=not args.no_verify)
+    else:
+        res = run_autonomous(
+            llm, n=args.n, m=args.m, n_semillas=args.n_semillas,
+            time_budget_seconds=args.time_budget_s,
+            output_dir=args.output_dir, seed=args.seed,
+            verify=not args.no_verify)
     print(json.dumps(res, ensure_ascii=False, indent=2, default=str))
     return 0
 
