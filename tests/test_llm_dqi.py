@@ -20,6 +20,24 @@ def _fake_llm_toom3(prompt):
          "reason": "batch 8 + toom3"},
     ]}
 
+ 
+
+def _verified_small(**kwargs):
+    """Mock válido para el flujo de búsqueda; la verificación real se prueba aparte."""
+    n = int(kwargs["n"])
+    nshots = int(kwargs.get("nshots", 8))
+    nslot = n // 2 + 1
+    return {
+        "valid": True,
+        "bm_sigma_correct": nslot * nshots,
+        "bm_sigma_total": nslot * nshots,
+        "scan_registers_intact": 2 * nslot * nshots,
+        "scan_registers_total": 2 * nslot * nshots,
+        "scan_phase_correct": nshots,
+        "scan_phase_total": nshots,
+        "scan_phase_errors": 0,
+    }
+
 
 def test_dqi_S_proyectado():
     # R * Q^2 * T con R=1.1912605.
@@ -41,7 +59,9 @@ def test_parse_deltas_dqi_valida_y_rechaza():
         raise AssertionError("nslot bajo el mínimo debió fallar")
 
 
-def test_llm_dqi_mejora_con_toom3():
+def test_llm_dqi_mejora_con_toom3(monkeypatch):
+    import auto_mvp.llm_auto_dqi as dqi_module
+    monkeypatch.setattr(dqi_module, "verify_small", _verified_small)
     # BARRIDO v2.17.6: antes de preguntar al LLM, el corredor mide
     # batch=1, 2, 3 con nslot mínimo. batch=1 da S=3.9983e10 (9.5%
     # mejor que la base 4.418e10) y es lo que guarda. El LLM
@@ -63,7 +83,9 @@ def test_llm_dqi_mejora_con_toom3():
     assert res["best_S"] == 1.1912605 * 1067 ** 2 * 29481
 
 
-def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
+def test_dqi_guarda_mejor_semilla_transparente(tmp_path, monkeypatch):
+    import auto_mvp.llm_auto_dqi as dqi_module
+    monkeypatch.setattr(dqi_module, "verify_small", _verified_small)
     # La semilla encontrada debe ser transparente: el circuito real
     # (.kmb) + la receta (JSON con knobs, Q/T/S y SHA256), para
     # reproducirla y evaluarla sin re-correr el LLM.
@@ -87,14 +109,17 @@ def test_dqi_guarda_mejor_semilla_transparente(tmp_path):
     assert recipe["qubits"] == 1067
     assert recipe["toffoli_like"] == 29481
     assert abs(recipe["S"] - res["best_S"]) < 1e-6
-    assert recipe["verify"] == {"bm_sigma": "24/24", "scan": "12/12"}
+    assert recipe["verify"] == {
+        "bm_sigma": "48/48", "scan": "96/96", "phase": "8/8"}
     # El SHA256 de la receta es el del .kmb guardado.
     assert (hashlib.sha256(kmb.read_bytes()).hexdigest()
             == recipe["kmb_sha256"])
     assert res["semilla"]["kmb_sha256"] == recipe["kmb_sha256"]
 
 
-def test_reproducir_semilla_coincide(tmp_path):
+def test_reproducir_semilla_coincide(tmp_path, monkeypatch):
+    import auto_mvp.llm_auto_dqi as dqi_module
+    monkeypatch.setattr(dqi_module, "verify_small", _verified_small)
     # Reconstruir con la receta da el mismo circuito (mismo SHA256):
     # la semilla es reproducible.
     from auto_mvp.llm_auto_dqi import reproducir_semilla

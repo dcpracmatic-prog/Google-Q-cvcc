@@ -939,16 +939,13 @@ def _read_reg(sim, reg):
     return sum(int(bits[k, 0]) << k for k in range(DEGREE))
 
 
-def verify_small(n=10, m=15, batch=4, seed=12345, nshots=4, toom3=False):
-    """Verifica el generador a escala chica contra la referencia clásica.
+def verify_small(n=10, m=15, batch=4, seed=12345, nshots=8, toom3=False):
+    """Verifica BM, restauración de registros y fase DQI a escala chica.
 
-    1. BM adelante: con un síndrome de errores conocidos, lee sigma
-       (C) y lo compara (normalizado a mónico) con el BM clásico.
-    2. Hybrid scan: con sigma/omega clásicos como entrada y máscaras
-       E, aplica el scan y comprueba la fase (paridad) contra la
-       referencia clásica.
-    `toom3=True` verifica con el multiplicador Toom-3 (45 T) en vez
-    del nativo (63 T). Devuelve un dict con los resultados y Q/T.
+    La fase se contrasta por shot usando read_phase_flipped_across_shots
+    contra la paridad calculada desde los errores de entrada conocidos.
+    Esta prueba es un filtro de regresión, no sustituye al verificador DQI
+    completo ni constituye certificación estadística de competición.
     """
     set_toom3(bool(toom3))
     try:
@@ -1009,58 +1006,99 @@ def _verify_small(n, m, batch, seed, nshots):
     res["bm_qubits"] = circ.num_qubits
     res["bm_toffoli"] = circ.operation_statistics().num_toffoli_like
     # --- 2. Hybrid scan: fase ---
-    # Usa el sigma/omega clásicos del primer shot como entrada viva.
-    sig0, _ = berlekamp_massey(S_list[0])
-    L0 = len(sig0) - 1
-    omg0 = omega_from_sigma(sig0, S_list[0])
-    sig0 = sig0 + [0] * (nslot - len(sig0))
-    omg0 = omg0 + [0] * (nslot - len(omg0))
-    masks = {}
-    for j in range(m):
-        masks[j] = int(rng.integers(0, 1 << DEGREE))
-    errs0 = forney_errors(sig0, omg0, m)
-    exp_parity = expected_phase_parity(errs0, masks)
+    # Cada shot usa su propio síndrome, polinomios y máscaras. La fase
+    # esperada se calcula desde los errores de ENTRADA conocidos, como
+    # hace el verificador DQI oficial; no desde la salida del decodificador.
+    sigma_rows = []
+    omega_rows = []
+    masks_rows = []
+    expected_phases = []
+    nslot = (n // 2) + 1
+    for shot in range(nshots):
+        sigma, _ = berlekamp_massey(S_list[shot])
+        omega = omega_from_sigma(sigma, S_list[shot])
+        sigma_rows.append((sigma + [0] * nslot)[:nslot])
+        omega_rows.append((omega + [0] * nslot)[:nslot])
+        masks = {
+            j: int(rng.integers(0, 1 << DEGREE))
+            for j in range(m)
+        }
+        masks_rows.append(masks)
+        expected_phases.append(
+            expected_phase_parity(errs_list[shot], masks))
+
     bld2 = km.CircuitBuilder()
     C2 = [bld2.alloc_qubits(DEGREE) for _ in range(nslot)]
     O2 = [bld2.alloc_qubits(DEGREE) for _ in range(nslot)]
     E2 = [bld2.alloc_bits(DEGREE) for _ in range(m)]
     zero_reg = bld2.alloc_qubits(DEGREE)
-    hybrid_scan(bld2, C2, O2, E2, m, batch, L0, zero_reg)
+    # El circuito completo usa todos los slots; los coeficientes
+    # superiores son cero cuando el grado real del polinomio es menor.
+    L_scan = nslot - 1
+    hybrid_scan(bld2, C2, O2, E2, m, batch, L_scan, zero_reg)
     circ2 = bld2.finish_circuit()
-    sim2 = km.Simulator(batch_size=1, debug_print=False,
+    sim2 = km.Simulator(batch_size=nshots, debug_print=False,
                         counting_operations=True, seed=1)
     sim2.use_same_registers_as(circ2)
     for i in range(nslot):
-        sim2.write_across_shots(km.array(C2[i]),
-                                _bits_matrix([sig0[i]], DEGREE))
-        sim2.write_across_shots(km.array(O2[i]),
-                                _bits_matrix([omg0[i]], DEGREE))
+        sim2.write_across_shots(
+            km.array(C2[i]),
+            _bits_matrix([sigma_rows[shot][i]
+                          for shot in range(nshots)], DEGREE))
+        sim2.write_across_shots(
+            km.array(O2[i]),
+            _bits_matrix([omega_rows[shot][i]
+                          for shot in range(nshots)], DEGREE))
     for j in range(m):
-        sim2.write_across_shots(km.array(E2[j]),
-                                _bits_matrix([masks[j]], DEGREE))
+        sim2.write_across_shots(
+            km.array(E2[j]),
+            _bits_matrix([masks_rows[shot][j]
+                          for shot in range(nshots)], DEGREE))
     sim2.do(circ2)
-    # La fase se lee como phase-flip: el verificador DQI usa
-    # read_phase_flipped_across_shots. Aquí se comprueba que el
-    # circuito no deja basura: los registros C2/O2 deben volver a su
-    # valor (el scan no los modifica) y la fase se verifica por la
-    # paridad de los phase-flips sobre un qubit testigo. Como el scan
-    # solo aplica fase global, se verifica que C2/O2 están intactos
-    # (el scan es limpio) y se reporta la T.
+
+    # Comprobar fase REAL producida por el simulador, no solo calcular
+    # la fase esperada. El API devuelve un bit de phase-flip por shot.
+    actual_phases = [
+        bool(value)
+        for value in sim2.read_phase_flipped_across_shots()
+    ]
+    phase_pairs = list(zip(actual_phases, expected_phases))
+    phase_correct = sum(actual == expected
+                        for actual, expected in phase_pairs)
+
+    # El scan también debe preservar sigma y omega en cada shot.
     ok_scan = 0
-    for i in range(nslot):
-        if _read_reg_shot(sim2, C2[i], 0) == sig0[i]:
-            ok_scan += 1
-        if _read_reg_shot(sim2, O2[i], 0) == omg0[i]:
-            ok_scan += 1
+    for shot in range(nshots):
+        for i in range(nslot):
+            if _read_reg_shot(sim2, C2[i], shot) == sigma_rows[shot][i]:
+                ok_scan += 1
+            if _read_reg_shot(sim2, O2[i], shot) == omega_rows[shot][i]:
+                ok_scan += 1
+    scan_total = 2 * nslot * nshots
+    phase_total = nshots
     res["scan_registers_intact"] = ok_scan
-    res["scan_registers_total"] = 2 * nslot
-    res["scan_expected_phase_parity"] = exp_parity
+    res["scan_registers_total"] = scan_total
+    # Conservamos la clave anterior como el primer caso y añadimos la
+    # secuencia completa para que los informes sean auditables.
+    res["scan_expected_phase_parity"] = (
+        expected_phases[0] if expected_phases else None)
+    res["scan_expected_phase_parities"] = expected_phases
+    res["scan_actual_phase_parities"] = actual_phases
+    res["scan_phase_correct"] = phase_correct
+    res["scan_phase_total"] = phase_total
+    res["scan_phase_errors"] = phase_total - phase_correct
     res["scan_qubits"] = circ2.num_qubits
     res["scan_toffoli"] = circ2.operation_statistics().num_toffoli_like
-    res["scan_note"] = ("la fase global no se lee como bit; la "
-                        "correctitud de la fase se verifica con el "
-                        "verificador DQI oficial (fast_verify_dqi) "
-                        "sobre el circuito completo")
+    res["scan_note"] = (
+        "fase comparada por shot con read_phase_flipped_across_shots; "
+        "la referencia se calcula desde los errores de entrada. "
+        "Esta prueba pequeña no sustituye al verificador DQI completo."
+    )
+    res["valid"] = (
+        res["bm_sigma_correct"] == res["bm_sigma_total"]
+        and res["scan_registers_intact"] == res["scan_registers_total"]
+        and res["scan_phase_correct"] == res["scan_phase_total"]
+    )
     return res
 
 
@@ -1100,7 +1138,7 @@ def main():
     ap.add_argument("--out", default="dqi_hybrid.kmb")
     ap.add_argument("--verify", action="store_true",
                     help="verifica a escala chica contra la referencia clásica")
-    ap.add_argument("--shots", type=int, default=4)
+    ap.add_argument("--shots", type=int, default=8)
     ap.add_argument("--seed", type=int, default=12345)
     args = ap.parse_args()
 
@@ -1110,8 +1148,7 @@ def main():
                            nshots=args.shots, toom3=args.toom3)
         res["verify_seconds"] = round(time.time() - t0, 1)
         print(json.dumps(res, indent=2))
-        ok = (res["bm_sigma_correct"] == res["bm_sigma_total"]
-              and res["scan_registers_intact"] == res["scan_registers_total"])
+        ok = bool(res["valid"])
         print("VERIFICACIÓN:", "PASS" if ok else "FAIL")
         return 0 if ok else 1
 
