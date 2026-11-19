@@ -1,4 +1,22 @@
-# STATUS.md — estado del repo (v2.17.14)
+# STATUS.md — estado del repo (v2.17.15)
+
+- **v2.17.15** (2026-11-19): **Motivos estables + búsqueda adaptativa
+  (Ley Cuántica v6/v6.1) alineados a la métrica.** Nuevo
+  `auto_mvp/circuits/motifs.py`: biblioteca de motivos medidos
+  (GF(2^12) 42T con 2,743 bloques en dqi.kmx, truncado 36T, Toom-4
+  42T, Karatsuba 63T, invsqrt 44Q, loader dfthcsos) con su impacto
+  en la métrica (Q² y ε⁺ en DQI, síntesis de rotaciones en invsqrt,
+  Lambda/E_gap/T en dfthcsos), selección por brecha de GM
+  (`lagging_task()` = dfthcsos, 11.39x) y aprendizaje real
+  (promoción/democión por costo medido). Nuevo
+  `auto_mvp/search/adaptive.py`: dinámica con inercia
+  ds/dτ = k[σ̄ − s], poda por saturación, selección de tarea por
+  brecha de GM y agresividad por tipo de fallo (cota dura → s ≤ 0.3).
+  Nuevo `auto_mvp/vqcc/package_audit.py`: auditoría del .zip antes
+  de enviar (no gastar 1 de 5 envíos por formato). Nuevo
+  `auto_mvp/circuits/generators/toom4.py`: Toom-4 42T, tests 13/13
+  (empata con el multiplicador 42T del DQI; no mejora). Tests
+  nuevos 6/6; total 25/25 con portfolio_28_23.
 
 - **v2.17.14** (2026-11-19): **El LLM mejora la base 28.23 +
   toolchain multilenguaje.** Nuevo `auto_mvp/portfolio_28_23.py`:
