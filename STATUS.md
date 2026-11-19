@@ -1,4 +1,16 @@
-# STATUS.md — estado del repo (v2.17.13)
+# STATUS.md — estado del repo (v2.17.14)
+
+- **v2.17.14** (2026-11-19): **El LLM mejora la base 28.23 +
+  toolchain multilenguaje.** Nuevo `auto_mvp/portfolio_28_23.py`:
+  la ingeniería inversa del portfolio GM 28.23163 como punto de
+  partida del LLM (ya no genera desde cero; mejora ESTO), con los
+  puntos a mejorar por tarea y lo ya medido que no funciona
+  (NO_REINTENTAR). Tests 6/6. Toolchain: `toolchain/` con Verilog
+  del multiplicador GF(2^12) (verificado 500/500), esquema JSON IR
+  y emisor C++ IR->.kmx (probado). Yosys pendiente de instalar;
+  Julia (polinomios invsqrt) se construye en otro chat.
+
+
 
 - **v2.17.13** (2026-11-19): **SWAP toca 2 qubits en commuting y
   fanout.** `_qubits_of` metía SWAP en el grupo de 1 qubit

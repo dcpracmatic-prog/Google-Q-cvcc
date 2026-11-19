@@ -1,0 +1,41 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Quantum EDA IR (bus neutral entre capas)",
+  "description": "Netlist AND/XOR + plan de descomputación. Capa 2 del toolchain.",
+  "type": "object",
+  "required": ["name", "inputs", "outputs", "nodes", "qubit_budget"],
+  "properties": {
+    "name": {"type": "string", "description": "Nombre del bloque (ej. gf212_mul)."},
+    "inputs": {"type": "array", "items": {"type": "string"}},
+    "outputs": {"type": "array", "items": {"type": "string"}},
+    "qubit_budget": {
+      "type": "integer",
+      "description": "Q máximo permitido (regla de oro: Julia lo impone; si el netlist lo excede, se fuerza descomputación por bloques)."
+    },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "op", "args", "out"],
+        "properties": {
+          "id": {"type": "string"},
+          "op": {"type": "string", "enum": ["XOR", "AND", "NOT"]},
+          "args": {"type": "array", "items": {"type": "string"}},
+          "out": {"type": "string"}
+        }
+      }
+    },
+    "uncompute_plan": {
+      "type": "array",
+      "description": "Secuencia de descomputación por bloques (Bennett), producida por Julia (capa 3). Cada entrada nombra los nodos a descomputar y el qubit que se libera.",
+      "items": {
+        "type": "object",
+        "required": ["block", "frees"],
+        "properties": {
+          "block": {"type": "string"},
+          "frees": {"type": "array", "items": {"type": "string"}}
+        }
+      }
+    }
+  }
+}
