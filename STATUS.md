@@ -1,4 +1,21 @@
-# STATUS.md — estado del repo (v2.17.15)
+# STATUS.md — estado del repo (v2.17.16)
+
+- **v2.17.16** (2026-11-19): **corrección del FAIL del generador
+  híbrido DQI a n=70.** El kernel v2.17.11 (145924371 v2) daba FAIL
+  en Kaggle: 44,250 errores de valor y 28,984 de fase de 102,400.
+  Causa medida: `bm_backward` liberaba `hist_mult` sucio y sus
+  qubits se reutilizaban como temps del paso (c), rompiendo el HMR
+  (fase ~50% al azar); `zero_fix_del` liberaba `is_zero` sucio
+  (ancilla q837). Arreglo unitario: `hist_mult` se limpia
+  recomputando `mult` y haciendo XOR antes de liberarlo;
+  `is_zero` se limpia reaplicando el test de cero. Medido en
+  sandbox (réplica del verificador oficial): n=10/30/50/70 con
+  0 errores de valor y 0 de fase (n=70, 1,024 shots, Q=6,407,
+  T=2,356,851). Nuevo test de regresión
+  `test_full_circuit_phase_with_random_masks`; suite 10/10 PASS.
+  Pendiente: verificación en Kaggle a n=70 con el verificador
+  oficial (ver notes/v2.17.16.md).
+
 
 - **v2.17.15** (2026-11-19): **Motivos estables + búsqueda adaptativa
   (Ley Cuántica v6/v6.1) alineados a la métrica.** Nuevo

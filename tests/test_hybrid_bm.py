@@ -193,3 +193,59 @@ def test_verify_small_phase_ok_all_batches():
         res = verify_small(n=10, m=15, batch=batch, seed=12345, nshots=8)
         assert res["scan_phase_errors"] == 0, f"batch={batch}"
         assert res["valid"] is True
+
+
+def test_full_circuit_phase_with_random_masks():
+    # Regresión v2.17.16: el circuito completo con máscaras aleatorias
+    # (fase no trivial) daba ~50% de errores de fase a n=10 en Kaggle
+    # (kernel 145924371 v2: 44,250 errores de valor y 28,984 de fase
+    # a n=70). Causa: `bm_backward` liberaba `hist_mult` sucio y sus
+    # qubits se reutilizaban como temps del paso (c), rompiendo el HMR;
+    # y `zero_fix_del` liberaba `is_zero` sucio (ancilla q837).
+    # El arreglo limpia ambos de forma unitaria antes de liberarlos.
+    # Este test comprueba valor Y fase en el circuito completo.
+    import numpy as np
+
+    from auto_mvp.circuits.generators.build_hybrid_bm import (
+        DEGREE, expected_phase_parity)
+
+    n, m, batch, nslot = 10, 15, 4, 6
+    circ, info = build_hybrid_bm_circuit(
+        n=n, m=m, batch=batch, nslot=nslot, toom3=False)
+    q = int(info["qubits"])
+    S_qubits = km.array([km.q(k) for k in range(n * DEGREE)])
+    E_bits = km.array([km.b(k) for k in range(m * DEGREE)])
+    ancilla = km.array([km.q(k) for k in range(n * DEGREE, q)])
+    rng = np.random.default_rng(12345)
+    nshots = 8
+    s_bits = np.zeros((n * DEGREE, nshots), dtype=bool)
+    e_bits = np.zeros((m * DEGREE, nshots), dtype=bool)
+    expected_phase = np.zeros(nshots, dtype=bool)
+    for s in range(nshots):
+        w = int(rng.integers(1, max(2, n // 2)))
+        pos = rng.choice(m, size=w, replace=False)
+        err = {int(j): int(rng.integers(1, 1 << DEGREE)) for j in pos}
+        masks = {int(j): int(rng.integers(0, 1 << DEGREE))
+                 for j in range(m)}
+        S_list = syndrome_from_errors_n(err, n)
+        for j in range(n):
+            for b in range(DEGREE):
+                s_bits[j * DEGREE + b, s] = bool((S_list[j] >> b) & 1)
+        for j in range(m):
+            for b in range(DEGREE):
+                e_bits[j * DEGREE + b, s] = bool((masks[j] >> b) & 1)
+        expected_phase[s] = bool(expected_phase_parity(err, masks))
+    sim = km.Simulator(batch_size=nshots, debug_print=False,
+                       counting_operations=True, seed=1)
+    sim.use_same_registers_as(circ)
+    sim.write_across_shots(S_qubits, s_bits)
+    sim.write_across_shots(E_bits, e_bits)
+    sim.do(circ)
+    reg_diff = sim.read_across_shots(S_qubits) ^ s_bits
+    junk = sim.read_across_shots(ancilla)
+    phase_flipped = sim.read_phase_flipped_across_shots()
+    assert not reg_diff.any(), "S no se restauró"
+    assert not junk.any(), "hay ancilla en 1"
+    assert (phase_flipped == expected_phase).all(), (
+        "fase incorrecta: %s vs esperada %s"
+        % (phase_flipped.astype(int), expected_phase.astype(int)))

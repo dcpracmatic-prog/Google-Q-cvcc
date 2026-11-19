@@ -396,6 +396,11 @@ def zero_fix(bld, acc):
 def zero_fix_del(bld, acc, is_zero):
     """Descomputa el arreglo de cero (0 T): quita el 1 si se puso."""
     bld.cx(is_zero, acc[0])
+    # FIX (MEDIDO): is_zero guarda (acc era 0). Si se libera sucio,
+    # deja ancilla sucia (q837, 6/256 errores de valor a n=10). Se
+    # limpia reaplicando el test de cero: acc ya está restaurado a su
+    # valor original, así que is_zero ^= (acc == 0) -> 0.
+    bld.flip_if_equal(acc, 0, target=is_zero)
     bld.free(km.array([is_zero]))
 
 
@@ -852,6 +857,27 @@ def bm_backward(bld, S, C, B, Lreg, hist, n, nslot=36):
         for i in range(NSLOT):
             for k in range(DEGREE):
                 bld.cswap(flag[0], C[i][k], B[i][k])
+        # FIX FASE (MEDIDO): hist_mult guarda mult (valor != 0). Si se
+        # libera sucio, sus qubits se reutilizan como temps del paso (c)
+        # y el HMR pierde la fase (128/256 errores). reset() NO sirve:
+        # reset en un qubit en 1 aleatoriza la fase a ~50% (MEDIDO).
+        # Se limpia de forma unitaria recomputando mult = alpha si !flag,
+        # 1/alpha si flag, y XOR: hist_mult ^= mult -> 0. Determinista
+        # incluso si alpha=0 (la inversa de 0 se recomputa igual).
+        inv2, scaf2 = gf_inv_new(bld, alpha_reg)
+        mult2 = bld.alloc_qubits(DEGREE)
+        for k in range(DEGREE):
+            bld.cx(alpha_reg[k], mult2[k])
+        for k in range(DEGREE):
+            bld.cswap(flag[0], mult2[k], inv2[k])
+        for k in range(DEGREE):
+            bld.cx(mult2[k], hist_mult[k])
+        for k in range(DEGREE):
+            bld.cswap(flag[0], mult2[k], inv2[k])
+        for k in range(DEGREE):
+            bld.cx(alpha_reg[k], mult2[k])
+        bld.free(mult2)
+        gf_inv_del(bld, alpha_reg, inv2, scaf2)
         bld.free(hist_mult)
         # d. (sin efecto: mult/ainv ya se liberaron en el adelante tras
         #    guardar hist_mult; no hay nada que deshacer aquí.)
