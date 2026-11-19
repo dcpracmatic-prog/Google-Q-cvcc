@@ -20,7 +20,6 @@ def _fake_llm_toom3(prompt):
          "reason": "batch 8 + toom3"},
     ]}
 
- 
 
 def _verified_small(**kwargs):
     """Mock válido para el flujo de búsqueda; la verificación real se prueba aparte."""

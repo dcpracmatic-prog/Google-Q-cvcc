@@ -180,9 +180,9 @@ def _measure_knobs(n: int, m: int, batch: int, nslot: int, toom3: bool,
                    verify: bool) -> dict[str, Any]:
     """Materializa el DQI con esos knobs y mide Q/T/S.
 
-    Si `verify` es True, corre `verify_small` a esta escala para
-    confirmar que el circuito es válido (sigma correcto y scan
-    limpio) antes de aceptar el S.
+    Si `verify` es True, exige que `verify_small` confirme sigma,
+    preservación de registros y fase DQI por shot antes de aceptar el S.
+    Esta comprobación es un filtro pequeño, no la certificación oficial.
     """
     circ, info = build_hybrid_bm_circuit(
         n=n, m=m, batch=batch, nslot=nslot, toom3=toom3)
