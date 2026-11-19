@@ -1,4 +1,16 @@
-# STATUS.md — estado del repo (v2.17.12)
+# STATUS.md — estado del repo (v2.17.13)
+
+- **v2.17.13** (2026-11-19): **SWAP toca 2 qubits en commuting y
+  fanout.** `_qubits_of` metía SWAP en el grupo de 1 qubit
+  (`args[:1]`); SWAP tiene 2. Al tratarlo como de 1, el operador
+  podía conmutar un SWAP con una compuerta en su segundo qubit como
+  si fueran disjuntos: circuito inválido. Ahora SWAP va en el grupo
+  de 2 qubits (`args[:2]`, con CX y CZ) en `commuting.py` y
+  `fanout.py`. Verificado: SWAP reporta {q0, q1} en ambos;
+  test_tool_v280/v290 6/6. Es corrección de exactitud, no mejora de
+  puntaje por sí sola (ver notes/v2.17.13.md).
+
+
 
 - **v2.17.12** (2026-11-19): **la suite pasa en Kaggle (rutas portátiles).**
   Kaggle v7 (v2.17.10) dio FAIL: 239 pasaron, 15 fallaron, 0 errores,

@@ -93,9 +93,9 @@ def _qubits_of(op: str, args: list[str]) -> frozenset:
     """Los qubits que toca una compuerta (por su opcode)."""
     if op in ("CCX", "CCZ", "CSWAP", "CCZ_IF"):
         return frozenset(args[:3])
-    if op in ("CX", "CZ"):
+    if op in ("CX", "CZ", "SWAP"):
         return frozenset(args[:2])
-    if op in ("X", "Z", "H", "SWAP", "Z_POW"):
+    if op in ("X", "Z", "H", "Z_POW"):
         return frozenset(args[:1])
     return frozenset(a for a in args if a.startswith("q"))
 

@@ -54,9 +54,9 @@ def _qubits_of(op: str, args: list[str]) -> set[str]:
     """Los qubits que toca una compuerta (por su opcode)."""
     if op in ("CCX", "CCZ", "CSWAP", "CCZ_IF"):
         return set(args[:3])
-    if op in ("CX", "CZ"):
+    if op in ("CX", "CZ", "SWAP"):
         return set(args[:2])
-    if op in ("X", "Z", "H", "SWAP"):
+    if op in ("X", "Z", "H"):
         return set(args[:1])
     if op == "Z_POW":
         return set(args[:1])
