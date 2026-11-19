@@ -1,4 +1,16 @@
-# STATUS.md — estado del repo (v2.17.9)
+# STATUS.md — estado del repo (v2.17.10)
+
+- **v2.17.10** (2026-11-18): **kickmix con GF2Field en Kaggle.** La
+  prueba en Kaggle v6 (commit v2.17.8) dio FAIL con 0 pruebas: pytest
+  se interrumpió en la recolección porque el kickmix del subprocess
+  no tenía `GF2Field` (la prueba de humo en esa misma corrida sí
+  funcionó: mini circuito n=10 Q=1067 T=29,481). `setup_kaggle` solo
+  exigía `Circuit` y `Simulator`; ahora `_km_ok()` exige también
+  `GF2Field` (los generadores lo crean al importarse) y si falta se
+  hace `pip force-reinstall kickmix==1.0.0`. El notebook de prueba
+  además pasa al subprocess de pytest el PYTHONPATH del kickmix ya
+  verificado. Veredicto Kaggle v7 pendiente (ver notes/v2.17.10.md).
+
 
 Última actualización: 2026-11-18. Los resultados históricos se conservan;
 las verificaciones nuevas indican explícitamente su alcance.

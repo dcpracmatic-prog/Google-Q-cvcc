@@ -233,7 +233,8 @@ def setup_kaggle(input_dir: str | Path = "/kaggle/input") -> Path | None:
     kickmix==1.0.0). Devuelve el directorio de la competencia (o
     None si no se encontró: generar semillas no lo necesita, solo
     kickmix; solo se falla si kickmix sigue sin Circuit tras todos
-    los intentos).
+    los intentos). Desde v2.17.10 el cheque también exige GF2Field,
+    porque los generadores del repo lo crean al importarse.
     """
     inp = Path(input_dir)
 
@@ -255,9 +256,18 @@ def setup_kaggle(input_dir: str | Path = "/kaggle/input") -> Path | None:
     comp = _buscar("verifiable") or _buscar("google")
 
     def _km_ok() -> bool:
+        # v2.17.10: el repo también necesita GF2Field (build_hybrid_bm y
+        # toom3 lo crean al importarse). Un kickmix con Circuit y Simulator
+        # pero sin GF2Field pasaba este cheque y luego la suite fallaba en
+        # la recolección (Kaggle v6: AttributeError en test_hybrid_bm y
+        # test_llm_dqi, 0 pruebas corrieron).
         try:
             import kickmix as _km
-            return hasattr(_km, "Circuit") and hasattr(_km, "Simulator")
+            return (
+                hasattr(_km, "Circuit")
+                and hasattr(_km, "Simulator")
+                and hasattr(_km, "GF2Field")
+            )
         except Exception:
             return False
 
