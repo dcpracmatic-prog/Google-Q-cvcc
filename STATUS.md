@@ -1,9 +1,24 @@
-# STATUS.md — estado del repo (v2.17.6)
+# STATUS.md — estado del repo (v2.17.7)
 
-Última actualización: 2026-11-14. Todo lo que dice aquí está
-verificado en sandbox y/o en Kaggle; lo que no, dice que no.
+Última actualización: 2026-11-18. Los resultados históricos se conservan;
+las verificaciones nuevas indican explícitamente su alcance.
 
 ## Versión
+
+- **v2.17.7** (2026-11-18): cierre del falso PASS de fase DQI. 
+  `verify_small` compara por shot `read_phase_flipped_across_shots()`
+  con la paridad calculada desde los errores de entrada conocidos, además
+  de comprobar sigma y preservación de registros. El test pequeño usa
+  8 shots por defecto y devuelve `valid=False` ante cualquier discrepancia.
+  `llm_auto_dqi` solo clasifica y guarda candidatos cuando las tres
+  comprobaciones pasan; con `verify=False` no promociona candidatos.
+  Se añadió una regresión con un scan deliberadamente sin fase.
+  **Alcance:** el cambio cierra la vía de promoción incorrecta; no corrige
+  por sí mismo el posible defecto HMR/Forney. Las mediciones anteriores
+  documentaron errores de fase (3/8 en una configuración); hasta que la
+  fase pase en las pruebas nuevas y el verificador completo, el DQI debe
+  considerarse no válido. La suite no se pudo ejecutar en este entorno.
+
 
 - **v2.17.6** (2026-11-14): auditoría pedida por Arturo (el
   optimizador no mejoraba en Kaggle v2.17.4). Causa medida: el

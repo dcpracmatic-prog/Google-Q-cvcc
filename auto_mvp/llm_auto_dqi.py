@@ -180,9 +180,9 @@ def _measure_knobs(n: int, m: int, batch: int, nslot: int, toom3: bool,
                    verify: bool) -> dict[str, Any]:
     """Materializa el DQI con esos knobs y mide Q/T/S.
 
-    Si `verify` es True, corre `verify_small` a esta escala para
-    confirmar que el circuito es válido (sigma correcto y scan
-    limpio) antes de aceptar el S.
+    Si `verify` es True, exige que `verify_small` confirme sigma,
+    preservación de registros y fase DQI por shot antes de aceptar el S.
+    Esta comprobación es un filtro pequeño, no la certificación oficial.
     """
     circ, info = build_hybrid_bm_circuit(
         n=n, m=m, batch=batch, nslot=nslot, toom3=toom3)
@@ -194,22 +194,30 @@ def _measure_knobs(n: int, m: int, batch: int, nslot: int, toom3: bool,
         "instructions": int(info["instructions"]),
     }
     if verify:
+        # Ocho shots pequeños detectan fallos de fase que antes quedaban
+        # ocultos porque verify_small solo comprobaba sigma/C/O.
         res = verify_small(n=n, m=m, batch=batch, seed=12345,
-                           nshots=4, toom3=toom3)
-        ok = (res["bm_sigma_correct"] == res["bm_sigma_total"]
-              and res["scan_registers_intact"]
-              == res["scan_registers_total"])
-        entry["valid"] = bool(ok)
+                           nshots=8, toom3=toom3)
+        ok = bool(res.get("valid", False))
+        entry["valid"] = ok
         entry["verify"] = {
             "bm_sigma": f"{res['bm_sigma_correct']}/"
                         f"{res['bm_sigma_total']}",
             "scan": f"{res['scan_registers_intact']}/"
                     f"{res['scan_registers_total']}",
+            "phase": f"{res['scan_phase_correct']}/"
+                     f"{res['scan_phase_total']}",
         }
         if not ok:
-            entry["reason"] = "verify_small falló (sigma o scan)"
+            entry["reason"] = (
+                "verify_small falló: sigma, registros o fase DQI "
+                f"({res.get('scan_phase_errors', '?')} errores de fase)"
+            )
     else:
-        entry["valid"] = True
+        # Sin verificación no puede aprobarse ni promoverse un candidato.
+        entry["valid"] = False
+        entry["verified"] = False
+        entry["reason"] = "verificación desactivada: candidato no promovible"
     return entry
 
 

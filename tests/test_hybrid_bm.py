@@ -3,7 +3,7 @@ descomposición híbrida de medición y descomputación clásica.
 
 Verifica a escala chica contra la referencia clásica:
 - BM adelante produce el sigma correcto (normalizado a mónico).
-- El hybrid scan no corrompe sigma/omega (es limpio).
+- El hybrid scan preserva sigma/omega y aplica la fase DQI esperada.
 - El circuito completo restaura S y deja los ancillas a |0>.
 """
 from __future__ import annotations
@@ -76,10 +76,15 @@ def test_circuito_completo_sin_basura():
         info["toffoli_like"])
 
 
-def test_verify_small_passes():
-    res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=4)
-    assert res["bm_sigma_correct"] == res["bm_sigma_total"] == 24
-    assert res["scan_registers_intact"] == res["scan_registers_total"] == 12
+def test_verify_small_reports_real_phase_result():
+    # El historial v2.17.4 documenta errores de fase en esta semilla.
+    # Ya no puede imprimirse PASS solo por sigma y registros intactos.
+    res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=8)
+    assert res["bm_sigma_correct"] == res["bm_sigma_total"] == 48
+    assert res["scan_registers_intact"] == res["scan_registers_total"] == 96
+    assert res["scan_phase_total"] == 8
+    assert res["scan_phase_correct"] + res["scan_phase_errors"] == 8
+    assert res["valid"] is (res["scan_phase_errors"] == 0)
 
 
 def test_full_circuit_restores_syndrome_and_cleans_ancillas():
@@ -114,6 +119,24 @@ def test_full_circuit_restores_syndrome_and_cleans_ancillas():
     assert all(_read_reg_shot(sim, B[i], 0) == 0 for i in range(nslot))
 
 
+def test_verify_small_rejects_missing_phase_kick(monkeypatch):
+    import auto_mvp.circuits.generators.build_hybrid_bm as gen
+
+    def no_phase_scan(bld, C, OMG, E, m, batch, L, zero_reg):
+        # El circuito deja C/O intactos, pero nunca aplica la fase DQI.
+        return {"batches": 0}
+
+    monkeypatch.setattr(gen, "hybrid_scan", no_phase_scan)
+    # Fuerza una fase de referencia no trivial para este test negativo.
+    monkeypatch.setattr(gen, "expected_phase_parity",
+                        lambda errors, masks: 1)
+    res = gen.verify_small(n=10, m=15, batch=4, seed=12345, nshots=4)
+    assert res["scan_registers_intact"] == res["scan_registers_total"]
+    assert res["scan_phase_correct"] == 0
+    assert res["scan_phase_errors"] == 4
+    assert res["valid"] is False
+
+
 def test_small_full_build_counts():
     circ, info = build_hybrid_bm_circuit(n=10, m=15, batch=4, nslot=6)
     assert info["qubits"] > 0
@@ -134,8 +157,14 @@ def test_toom3_lowest_T_same_Q():
     assert toom3["qubits"] == native["qubits"]
 
 
-def test_verify_small_toom3_passes():
-    res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=4,
+def test_verify_small_toom3_also_checks_phase():
+    # toom3=True permanece desactivado por el generador; la comprobación
+    # de fase debe ejecutarse igualmente y formar parte de valid.
+    res = verify_small(n=10, m=15, batch=4, seed=12345, nshots=8,
                        toom3=True)
-    assert res["bm_sigma_correct"] == res["bm_sigma_total"] == 24
-    assert res["scan_registers_intact"] == res["scan_registers_total"] == 12
+    assert res["scan_phase_total"] == 8
+    assert res["valid"] is (
+        res["bm_sigma_correct"] == res["bm_sigma_total"]
+        and res["scan_registers_intact"] == res["scan_registers_total"]
+        and res["scan_phase_correct"] == res["scan_phase_total"]
+    )
