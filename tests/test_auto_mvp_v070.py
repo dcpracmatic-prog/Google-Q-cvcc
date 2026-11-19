@@ -26,7 +26,7 @@ import pytest
 
 REPO = Path(__file__).resolve().parents[1]
 SKILL = REPO / "skills" / "auto-mvp-vqcc"
-VENV_PY = "/home/hatch/workspace/sandbox-run/venv/bin/python"
+VENV_PY = sys.executable  # v2.17.11: portátil (sandbox y Kaggle)
 
 BM = {"name": "bm-forney", "kind": "candidate",
       "meta": {"task": "dqi", "metrics": {"Q": 1414, "T": 1511522,

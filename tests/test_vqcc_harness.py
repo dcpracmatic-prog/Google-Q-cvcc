@@ -8,6 +8,9 @@
    lambda_eff 49.254686, error_2 16.133 mHa (medido, ~30 s).
 """
 import os
+from pathlib import Path
+
+import pytest
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -118,8 +121,28 @@ def test_detector_estancamiento():
     print("detector OK: estancamiento a los 3 intentos sin mejorar")
 
 
+def _baseline_npz():
+    # v2.17.11: el .npz baseline vive en el sandbox; en Kaggle se busca
+    # en la entrada de la competencia. Si no está en ningún lado, el test
+    # se salta (es una verificación oficial LOCAL, no un fallo del repo).
+    cands = [Path(BASELINE_NPZ)]
+    kaggle_in = Path("/kaggle/input")
+    if kaggle_in.exists():
+        cands += sorted(kaggle_in.rglob("FeMoco76_65_60_60.npz"))
+    for c in cands:
+        if c.is_file():
+            return c
+    return None
+
+
 def test_verificacion_oficial_quimica_baseline():
-    r = verify_chemistry_factorization(BASELINE_NPZ)
+    npz = _baseline_npz()
+    if npz is None:
+        pytest.skip("sin el .npz baseline de FeMoCo (solo en local)")
+    from auto_mvp.vqcc.verify import STARTER_KIT
+    if not (STARTER_KIT / "starter_kit/verifier/score.py").is_file():
+        pytest.skip("sin el verificador oficial del starter kit (solo en local)")
+    r = verify_chemistry_factorization(npz)
     assert r.verified_by == "official", r
     assert r.ok, r.failures
     assert abs(r.metrics["lambda_eff"] - 49.254686) < 0.001, r.metrics

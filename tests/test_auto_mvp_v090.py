@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 
@@ -26,7 +27,7 @@ from auto_mvp.packaging import (EXPECTED_NPZ_KEYS, build_submission_zip,
                                 submission_ready, validate_submission_dir,
                                 validate_submission_zip)
 
-VENV_PY = "/home/hatch/workspace/sandbox-run/venv/bin/python"
+VENV_PY = sys.executable  # v2.17.11: portátil (sandbox y Kaggle)
 KEYS = list(EXPECTED_NPZ_KEYS)
 
 

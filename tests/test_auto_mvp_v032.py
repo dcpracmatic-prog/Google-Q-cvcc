@@ -11,6 +11,8 @@ alcanzable con el enfoque actual: el producto debe ser 27,000 contra
 from __future__ import annotations
 
 import json
+
+import pytest
 import shutil
 import sys
 import tempfile
@@ -120,6 +122,10 @@ def test_pipeline_phases_and_resume():
 
 
 def test_kaggle_init_local():
+    # v2.17.11: este test es del init LOCAL; en Kaggle el entorno es
+    # "kaggle" y el assert no aplica (se salta, no se falla).
+    if detect_environment() == "kaggle":
+        pytest.skip("init local: en Kaggle el entorno es kaggle")
     assert detect_environment() == "local"
     with tempfile.TemporaryDirectory() as d:
         # La copia vendida como la lleva el notebook: un directorio que

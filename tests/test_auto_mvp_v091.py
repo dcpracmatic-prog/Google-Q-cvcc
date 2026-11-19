@@ -36,10 +36,15 @@ E1_BEST = 3.4437759310890215e-08  # grado 7 / 1 segmento (tabla del Lab)
 
 
 def _official_rotation_t_count():
-    spec = importlib.util.spec_from_file_location(
-        "verif_invsqrt",
-        "/home/hatch/workspace/sandbox-run/competition-verifiers/invsqrt/"
-        "verify_submission_invsqrt.py")
+    # v2.17.11: la copia vendida en el repo es idéntica a la oficial
+    # (mismo rotation_t_count); la ruta del sandbox no existe en Kaggle.
+    repo = Path(__file__).resolve().parents[1]
+    vendored = (repo / "auto_mvp" / "circuits" / "verifiers"
+                / "verify_submission_invsqrt.py")
+    sandbox = Path("/home/hatch/workspace/sandbox-run/competition-verifiers"
+                   "/invsqrt/verify_submission_invsqrt.py")
+    path = vendored if vendored.is_file() else sandbox
+    spec = importlib.util.spec_from_file_location("verif_invsqrt", str(path))
     mod = importlib.util.module_from_spec(spec)
     sys.modules["verif_invsqrt"] = mod
     spec.loader.exec_module(mod)

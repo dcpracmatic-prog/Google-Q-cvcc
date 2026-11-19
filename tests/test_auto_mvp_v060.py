@@ -53,7 +53,11 @@ def test_bridge_add_real():
     kids = {c.name: n for c, n in g.root.children}
     # Qualtran 0.8.0.dev0 renombró el adjunto: "And†" pasó a "And_adj"
     # (mismo conteo: And 3 + adjunto 3 + CNOT 15, T=12, Q=8).
-    assert kids["And"] == 3 and kids["And_adj"] == 3 and kids["CNOT"] == 15
+    # v2.17.11: en otras versiones el adjunto se llama "And†" o
+    # "And_dag"; se busca por prefijo, no por el nombre exacto.
+    adj = next((n for name, n in kids.items()
+                if name != "And" and name.startswith("And")), None)
+    assert kids["And"] == 3 and adj == 3 and kids["CNOT"] == 15
     # El T total sale de la suma de los llamados, como en Qualtran.
     assert g.total_T() == 12.0
 

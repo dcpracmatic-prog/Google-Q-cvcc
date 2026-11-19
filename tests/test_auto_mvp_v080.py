@@ -29,7 +29,7 @@ from auto_mvp.proxy import MetadataProxy
 from auto_mvp.step_plan import StepPlan
 from auto_mvp.vqcc import dqi_spec
 
-VENV_PY = "/home/hatch/workspace/sandbox-run/venv/bin/python"
+VENV_PY = sys.executable  # v2.17.11: portátil (sandbox y Kaggle)
 GRAPH = {"source": "cost_model", "root": {
     "name": "dqi-bm-forney", "kind": "dqi", "t_count": 1315731, "qubits": 1414,
     "rotations": 0, "cliffords": 0,

@@ -36,7 +36,7 @@ from auto_mvp.proxy import MetadataProxy
 from auto_mvp.vqcc import dqi_spec
 from auto_mvp.vqcc.costs import s_dqi
 
-VENV_PY = "/home/hatch/workspace/sandbox-run/venv/bin/python"
+VENV_PY = sys.executable  # v2.17.11: portátil (sandbox y Kaggle)
 EPS = 0.001188
 
 

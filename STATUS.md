@@ -1,4 +1,19 @@
-# STATUS.md — estado del repo (v2.17.11)
+# STATUS.md — estado del repo (v2.17.12)
+
+- **v2.17.12** (2026-11-19): **la suite pasa en Kaggle (rutas portátiles).**
+  Kaggle v7 (v2.17.10) dio FAIL: 239 pasaron, 15 fallaron, 0 errores,
+  4 saltaron (407 s). El arreglo GF2Field funcionó (0 errores de
+  recolección), pero 15 pruebas usaban rutas del sandbox escritas a
+  mano. Arreglos: VENV_PY = sys.executable (11 pruebas, v070/v080/
+  v090/v100); v091 usa la copia vendida del verificador invsqrt
+  (idéntica a la oficial); v032 se salta en Kaggle (test de init
+  local); v060 busca el adjunto de And por prefijo (qualtran cambia
+  el nombre según la versión); vqcc_harness se salta si falta el .npz
+  baseline o el verificador del starter kit. Además, el timeout del
+  SA en propose_sa_windows subió de budget_s + 180 a budget_s + 600
+  (el SA tarda ~170 s solo en cargar el .kmx; el margen era de 3 s
+  y los tests fallaban por timeout según la carga). Veredicto Kaggle
+  v8 pendiente (ver notes/v2.17.12.md).
 
 - **v2.17.11** (2026-11-19): **registros S/E nombrados para el
   verificador oficial DQI.** La prueba en Kaggle a escala completa

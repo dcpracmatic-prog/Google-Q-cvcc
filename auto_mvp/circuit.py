@@ -430,8 +430,12 @@ def propose_sa_windows(seed_path: str | Path, out_path: str | Path,
     cmd = [sys.executable, str(SA_WINDOWS), str(src), str(out_path),
            str(log_path), str(int(K)), str(float(budget_s)), str(int(seed))]
     try:
+        # v2.17.11: el SA tarda ~170 s solo en cargar el .kmx en esta
+        # máquina (el budget_s es solo el recocido); con +180 el margen
+        # era de 3 s y el test fallaba por timeout según la carga.
+        # +600 da margen real para la carga sin dejarlo sin límite.
         proc = subprocess.run(cmd, capture_output=True, text=True,
-                              timeout=float(budget_s) + 180)
+                              timeout=float(budget_s) + 600)
     except subprocess.TimeoutExpired:
         return {"ok": False, "gain": 0, "reason": "sa_windows excedió su tiempo",
                 "peephole": peephole_stats,
