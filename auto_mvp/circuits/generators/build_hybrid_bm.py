@@ -926,10 +926,14 @@ def build_hybrid_bm_circuit(n=70, degree=12, m=4095, batch=17,
 
 def _build_hybrid_bm_circuit(n, degree, m, batch, nslot):
     bld = km.CircuitBuilder()
-    S = [bld.alloc_qubits(DEGREE) for _ in range(n)]
+    # CORRECCIÓN registros (verificador oficial): los registros deben
+    # llamarse EXACTAMENTE S0..S{n-1} y E0..E{m-1}. alloc_qubits /
+    # alloc_bits crean registros anónimos y el verificador rechaza el
+    # circuito ("Registers must be exactly S0..S{n-1} and E0..E{m-1}").
+    S = [bld.create_quantum_register(DEGREE, name=f'S{i}') for i in range(n)]
     # E son las máscaras M_j: entradas CLÁSICAS (bits, no qubits).
     # No cuentan para Q ni T (son el plano clásico del híbrido).
-    E = [bld.alloc_bits(DEGREE) for _ in range(m)]
+    E = [bld.create_classical_register(DEGREE, name=f'E{j}') for j in range(m)]
     zero_reg = bld.alloc_qubits(DEGREE)
     C, B, Lreg, hist = bm_forward(bld, S, n, nslot=nslot)
     OMG = compute_omega(bld, C, S, n, nslot=nslot)

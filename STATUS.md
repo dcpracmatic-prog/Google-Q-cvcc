@@ -1,4 +1,20 @@
-# STATUS.md — estado del repo (v2.17.10)
+# STATUS.md — estado del repo (v2.17.11)
+
+- **v2.17.11** (2026-11-19): **registros S/E nombrados para el
+  verificador oficial DQI.** La prueba en Kaggle a escala completa
+  (kernel 145924371, v2.17.10) construyó el circuito n=70 (Q=6,407,
+  T=2,283,981) pero el verificador oficial dio FAIL antes de simular:
+  "Registers must be exactly S0..S{n-1} and E0..E{m-1}." El generador
+  creaba S y E anónimos (`alloc_qubits`/`alloc_bits`); ahora usa
+  `create_quantum_register(DEGREE, name=f'S{i}')` y
+  `create_classical_register(DEGREE, name=f'E{j}')` en
+  `_build_hybrid_bm_circuit`. Verificado en sandbox: `validate_registers`
+  oficial pasa (registros exactamente {S0..S9, E0..E14} a n=10/m=15),
+  `verify_small` batch=17 valid=True, ablación 0 errores de fase.
+  Sin cambio en Q ni T. S estimado a n=70: 1.1169e14 (5.8× peor que el
+  mejor propio 1.923348e13; el cuello sigue siendo Q=6,407). Veredicto
+  Kaggle v2.17.11 pendiente (ver notes/v2.17.11.md).
+
 
 - **v2.17.10** (2026-11-18): **kickmix con GF2Field en Kaggle.** La
   prueba en Kaggle v6 (commit v2.17.8) dio FAIL con 0 pruebas: pytest

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "auto-mvp"
-version = "2.17.10"
+version = "2.17.11"
 description = "Corredor autónomo de optimización para VQCC: mutador, pipeline, fuerza bruta con reparto equilibrado, compensación global, Notebook de ganadores y aceleración nativa opcional"
 readme = "README.md"
 requires-python = ">=3.10"
