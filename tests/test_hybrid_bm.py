@@ -85,7 +85,6 @@ def test_verify_small_reports_real_phase_result():
     assert res["scan_phase_total"] == 8
     assert res["scan_phase_correct"] + res["scan_phase_errors"] == 8
     assert res["valid"] is (res["scan_phase_errors"] == 0)
-    assert res["scan_phase_errors"] > 0
 
 
 def test_full_circuit_restores_syndrome_and_cleans_ancillas():

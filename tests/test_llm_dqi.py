@@ -59,6 +59,18 @@ def test_parse_deltas_dqi_valida_y_rechaza():
         raise AssertionError("nslot bajo el mínimo debió fallar")
 
 
+def test_llm_dqi_no_promueve_sin_verificacion():
+    try:
+        run_llm_auto_dqi(
+            target_S=1e9, n=10, m=15, max_proposals=2,
+            llm_client=_fake_llm_toom3, batch_size=2, verify=False,
+            base_batch=4, base_nslot=6, base_toom3=False)
+    except RuntimeError as exc:
+        assert "no es válida" in str(exc)
+    else:
+        raise AssertionError("verify=False no debe promover candidatos")
+
+
 def test_llm_dqi_mejora_con_toom3(monkeypatch):
     import auto_mvp.llm_auto_dqi as dqi_module
     monkeypatch.setattr(dqi_module, "verify_small", _verified_small)
