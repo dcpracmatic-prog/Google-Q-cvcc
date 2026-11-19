@@ -5,6 +5,16 @@ las verificaciones nuevas indican explícitamente su alcance.
 
 ## Versión
 
+- **v2.17.8** (2026-11-18): ajuste post-evaluación del gate de fase.
+  LLM único documentado como **Qwen Code 1.5** (Qwen2.5-Coder-1.5B-
+  Instruct; Gemini/Groq fuera del default en README/PIPELINE).
+  Nuevas ayudas de diagnóstico en `build_hybrid_bm`:
+  `diagnose_phase_positions` (por shot) y `diagnose_phase_ablation`
+  (batch=1 / `_single_position` vs Montgomery). Evidencia Kaggle del
+  gate: estática PASS, pytest 13/13, `verify_small` REJECTED por 3–5/8
+  errores de fase con sigma/registros intactos. El defecto HMR/Forney
+  sigue abierto; estas herramientas solo aíslan el camino.
+
 - **v2.17.7** (2026-11-18): cierre del falso PASS de fase DQI. 
   `verify_small` compara por shot `read_phase_flipped_across_shots()`
   con la paridad calculada desde los errores de entrada conocidos, además

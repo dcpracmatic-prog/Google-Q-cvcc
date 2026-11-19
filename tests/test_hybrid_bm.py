@@ -168,3 +168,13 @@ def test_verify_small_toom3_also_checks_phase():
         and res["scan_registers_intact"] == res["scan_registers_total"]
         and res["scan_phase_correct"] == res["scan_phase_total"]
     )
+
+
+def test_diagnose_phase_helpers_are_exported():
+    """Los helpers de diagnóstico existen y documentan el alcance."""
+    from auto_mvp.circuits.generators import build_hybrid_bm as gen
+    assert callable(gen.diagnose_phase_positions)
+    assert callable(gen.diagnose_phase_ablation)
+    assert "certificación" in (gen.diagnose_phase_positions.__doc__ or "").lower() or (
+        "no es certificación" in (gen.diagnose_phase_positions.__doc__ or "").lower()
+    )

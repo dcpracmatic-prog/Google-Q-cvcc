@@ -1,10 +1,12 @@
 """AUTO_MVP v2.17 — el modelo de lenguaje LOCAL del corredor.
 
-Arturo (2026-11-14): quitar Gemini/Groq (API, llave) y usar el modelo
-local Qwen2.5-Coder-1.5B-Instruct (GGUF Q4_K_M, llama-cpp-python,
-temperatura 0.7-0.8). El modelo corre EN la máquina (Kaggle o sandbox),
-sin llave, sin red, sin API. Por eso el corredor ya no pide nada para
-funcionar: el modelo está en la máquina, no en una API.
+Único LLM admitido: **Qwen Code 1.5** (Qwen2.5-Coder-1.5B-Instruct,
+GGUF Q4_K_M, llama-cpp-python, temperatura 0.7-0.8).
+
+Arturo (2026-11-14): quitar Gemini/Groq (API, llave) y fijar el modelo
+local Qwen Code 1.5. Corre EN la máquina (Kaggle o sandbox), sin llave,
+sin red, sin API. El corredor no pide credenciales: el modelo está en
+la máquina, no en una API externa.
 
 El modelo es el ESTRATEGA, no el constructor: lee la mejor semilla
 (compacta, en JSON) y el historial medido, y propone el siguiente
@@ -33,8 +35,9 @@ import urllib.request
 from pathlib import Path
 from typing import Any
 
-# Qwen2.5-Coder-1.5B-Instruct, GGUF Q4_K_M (mismo que el Notebook,
-# verificado en Kaggle v5: 3 llamadas, 0 fallbacks).
+# Qwen Code 1.5 = Qwen2.5-Coder-1.5B-Instruct, GGUF Q4_K_M
+# (mismo que el Notebook; verificado en Kaggle v5: 3 llamadas, 0 fallbacks).
+# No se usan Gemini, Groq ni otros proveedores de API.
 MODEL_URL = ("https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF"
              "/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf")
 MODEL_SHA256 = ("cc324af070c2ecbfd324a30884d2f951a7ff756aba85cb811a6ec436933bb046")

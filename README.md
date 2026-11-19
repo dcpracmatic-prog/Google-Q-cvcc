@@ -10,8 +10,8 @@ circuito válido, no cuenta, no es nada. Los números sueltos de la
 v1.x (GM 30.0056) no sirven: el corredor v1.x optimizaba métricas,
 no circuitos, y su éxito era tautológico. La v2.1 mide las TRES
 tareas con el protocolo oficial (invsqrt, DQI y química); la v2.2
-mete un modelo de lenguaje GRATIS (Gemini por defecto, Groq de
-respaldo) como estratega, y del Notebook salen SOLO LAS SEMILLAS
+mete un modelo de lenguaje como estratega (hoy: **Qwen Code 1.5**
+local; históricamente Gemini/Groq en v2.2), y del Notebook salen SOLO LAS SEMILLAS
 (JSON de kilobytes con la receta): ningún .kmx, porque no cabe. La
 v2.3 mete el PREFILTRO (directiva de Arturo 2026-11-12): el modelo
 propone un LOTE por ronda, el proxy los ordena en milisegundos y
@@ -65,9 +65,9 @@ el clasificador causal dice qué operador es causa y cuál es solo
 indicador, y cada corrida deja su reporte y su benchmark en `notes/`)
 
 - **Corredor con modelo + prefilter
-  (`python -m auto_mvp.llm_auto --target-S 90000`):** el modelo de
-  lenguaje gratis (Gemini por defecto, Groq de respaldo; la llave va
-  en el entorno o como secreto de Kaggle, nunca en el repo) lee la
+  (`python -m auto_mvp.llm_auto --target-S 90000`):** el estratega es
+  **Qwen Code 1.5** (Qwen2.5-Coder-1.5B-Instruct local, GGUF Q4_K_M;
+  sin API ni llave; Gemini/Groq retirados) y lee la
   mejor semilla y propone un LOTE de movimientos (K y seed) como
   JSON chico. El prefilter (`auto_mvp/prefilter.py`: proxy +
   MWIS) los ordena en milisegundos con su margen calibrado y solo

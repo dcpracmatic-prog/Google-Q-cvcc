@@ -42,7 +42,7 @@ Uso::
 
     python -m auto_mvp.llm_auto --target-S 90000 --max-proposals 10
 
-La llave NO existe: el modelo es local (Qwen2.5-Coder-1.5B-Instruct,
+La llave NO existe: el único LLM es Qwen Code 1.5 (Qwen2.5-Coder-1.5B-Instruct,
 GGUF Q4_K_M, llama-cpp-python, temp 0.7) y corre en la máquina, sin
 API. Sin modelo, corre igual con sa_windows y lo dice en el ledger
 (`llm: "sin modelo"`).

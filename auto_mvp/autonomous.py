@@ -798,7 +798,7 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
             "repo": "https://github.com/dcpracmatic-prog/"
                     "Google-Q-cvcc.git",
             "n_semillas": len(semillas),
-            "llm": "Qwen2.5-Coder-1.5B-Instruct Q4_K_M, temp 0.7, "
+            "llm": "Qwen Code 1.5 (Qwen2.5-Coder-1.5B-Instruct Q4_K_M), temp 0.7, "
                    "local en Kaggle, sin Gemini/Groq",
             "llm_calls": llm_calls,
             "llm_fallbacks": llm_fallbacks,
@@ -1143,7 +1143,7 @@ def run_tres_tareas(llm: Any | None, n: int = 30, m: int = 255,
             "repo": "https://github.com/dcpracmatic-prog/"
                     "Google-Q-cvcc.git",
             "n_semillas": len(semillas),
-            "llm": "Qwen2.5-Coder-1.5B-Instruct Q4_K_M, temp 0.7, "
+            "llm": "Qwen Code 1.5 (Qwen2.5-Coder-1.5B-Instruct Q4_K_M), temp 0.7, "
                    "local en Kaggle, sin Gemini/Groq",
             "llm_calls": llm_calls,
             "llm_fallbacks": llm_fallbacks,

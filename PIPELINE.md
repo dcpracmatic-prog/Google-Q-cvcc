@@ -20,14 +20,15 @@ Necesita kickmix + numpy (vienen del dataset de la competencia y
 del entorno). El corredor v1.x (`python -m auto_mvp.auto --target
 30`, solo stdlib) se mantiene por compatibilidad, superado.
 
-Arturo (2026-11-12): el modelo de lenguaje GRATIS (Gemini por
-defecto, Groq de respaldo) es el ESTRATEGA: lee la mejor semilla y
-propone un LOTE de movimientos (K y seed) como JSON chico. Y NO se
-construye .kmx en el Notebook: no cabe. Lo que sale son NADA MÁS
-LAS SEMILLAS (JSON de kilobytes con la receta para reconstruir el
-circuito). Directiva v2.3 (2026-11-12 00:56 CST): el prefilter
-(`auto_mvp/prefilter.py`) ordena el lote en milisegundos (proxy +
-MWIS) y solo los 1-2 mejores ganan el paso caro. El proxy es la
+Arturo (2026-11-12, actualizado 2026-11-18): el estratega es el LLM
+local **Qwen Code 1.5** (Qwen2.5-Coder-1.5B-Instruct, GGUF Q4_K_M).
+Gemini/Groq quedaron retirados: no hay llave ni API. El modelo lee
+la mejor semilla y propone un LOTE de movimientos (K y seed) como
+JSON chico. Y NO se construye .kmx en el Notebook: no cabe. Lo que
+sale son NADA MÁS LAS SEMILLAS (JSON de kilobytes con la receta
+para reconstruir el circuito). Directiva v2.3 (2026-11-12 00:56 CST):
+el prefilter (`auto_mvp/prefilter.py`) ordena el lote en milisegundos
+(proxy + MWIS) y solo los 1-2 mejores ganan el paso caro. El proxy es la
 puerta, no el producto: el S que cuenta es el MEDIDO. Directiva
 v2.4 (2026-11-12 01:56 CST): el operador lleva el PEEPHOLE
 (`auto_mvp/circuits/operators/peephole.py`, la ruta Fast de GUOQ
@@ -36,8 +37,8 @@ SA (44 Clifford menos en la semilla invsqrt, S idéntico). Y el
 DIALOG (`auto_mvp/circuits/dialog.py`) es la traza algebraica
 correcta (cocientes del EEA + playback), verificada 200/200 contra
 el EEA explícito.
-circuito después). La llave va en el entorno (`GEMINI_API_KEY` o
-`GROQ_API_KEY`; en Kaggle, como secreto del notebook); sin llave el
+circuito después). No hay llave: Qwen Code 1.5 corre en local
+(GGUF en `/kaggle/working` o `LLM_MODEL_PATH`). Sin el GGUF el
 corredor sigue con sa_windows.
 
 ## El flujo del corredor con modelo (`auto_mvp/llm_auto.py`)

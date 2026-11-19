@@ -1102,6 +1102,117 @@ def _verify_small(n, m, batch, seed, nshots):
     return res
 
 
+def diagnose_phase_positions(n=10, m=15, batch=4, seed=12345, nshots=4,
+                             toom3=False):
+    """Diagnóstico por shot de la fase DQI (no es certificación).
+
+    Ejecuta el mismo camino que ``verify_small`` y devuelve, por shot,
+    la paridad esperada, la medida y si coinciden. Útil para aislar si
+    el rechazo por fase es sistemático o depende de la semilla.
+
+    No altera el veredicto de ``verify_small`` ni sustituye el
+    verificador oficial de 102,400 shots.
+    """
+    res = verify_small(n=n, m=m, batch=batch, seed=seed, nshots=nshots,
+                       toom3=toom3)
+    expected = list(res.get("scan_expected_phase_parities") or [])
+    actual = list(res.get("scan_actual_phase_parities") or [])
+    rows = []
+    for i, (e, a) in enumerate(zip(expected, actual)):
+        rows.append({
+            "shot": i,
+            "expected": int(bool(e)),
+            "actual": int(bool(a)),
+            "match": bool(e) == bool(a),
+        })
+    return {
+        "n": n, "m": m, "batch": batch, "seed": seed, "nshots": nshots,
+        "valid": bool(res.get("valid", False)),
+        "phase_correct": res.get("scan_phase_correct"),
+        "phase_total": res.get("scan_phase_total"),
+        "phase_errors": res.get("scan_phase_errors"),
+        "bm_sigma_ok": res.get("bm_sigma_correct") == res.get("bm_sigma_total"),
+        "registers_ok": (
+            res.get("scan_registers_intact") == res.get("scan_registers_total")
+        ),
+        "shots": rows,
+        "note": (
+            "Diagnóstico de fase por shot. Un match=False con sigma y "
+            "registros correctos apunta al camino HMR/Forney/phase_kick, "
+            "no al BM. Qwen Code 1.5 no interviene aquí."
+        ),
+    }
+
+
+def diagnose_phase_ablation(n=10, m=15, seed=12345, nshots=8, toom3=False,
+                            batches=(1, 4, 8)):
+    """Ablación de fase: compara batch=1 (solo _single_position) vs lotes.
+
+    - ``batch=1`` fuerza el camino ``_single_position`` en cada j
+      (sin Montgomery).
+    - ``batch>=2`` usa ``montgomery_batch`` (y cola single si aplica).
+
+    Si batch=1 falla igual que batch>1, el defecto no es exclusivo del
+    lote Montgomery. Si solo fallan los lotes, el sospechoso es
+    Montgomery / emparejamiento de inversiones.
+
+    Devuelve un dict con una fila por batch y el resumen de fase.
+    No es certificación estadística ni el verificador oficial.
+    """
+    rows = []
+    for batch in batches:
+        b = int(batch)
+        if b < 1:
+            continue
+        # batch > m se recorta al comportamiento real del scan
+        b_eff = min(b, m)
+        try:
+            res = verify_small(n=n, m=m, batch=b_eff, seed=seed,
+                               nshots=nshots, toom3=toom3)
+            path = ("single_position_only" if b_eff == 1
+                    else "montgomery_batch")
+            rows.append({
+                "batch": b_eff,
+                "path": path,
+                "valid": bool(res.get("valid", False)),
+                "phase_correct": res.get("scan_phase_correct"),
+                "phase_total": res.get("scan_phase_total"),
+                "phase_errors": res.get("scan_phase_errors"),
+                "sigma_ok": res.get("bm_sigma_correct") == res.get("bm_sigma_total"),
+                "registers_ok": (
+                    res.get("scan_registers_intact")
+                    == res.get("scan_registers_total")
+                ),
+                "error": None,
+            })
+        except Exception as exc:  # pragma: no cover - entorno sin kickmix
+            rows.append({
+                "batch": b_eff,
+                "path": ("single_position_only" if b_eff == 1
+                         else "montgomery_batch"),
+                "valid": None,
+                "phase_correct": None,
+                "phase_total": None,
+                "phase_errors": None,
+                "sigma_ok": None,
+                "registers_ok": None,
+                "error": f"{type(exc).__name__}: {exc}",
+            })
+    phase_errors = [r["phase_errors"] for r in rows if r["phase_errors"] is not None]
+    return {
+        "n": n, "m": m, "seed": seed, "nshots": nshots, "toom3": bool(toom3),
+        "rows": rows,
+        "all_paths_phase_clean": bool(phase_errors) and all(e == 0 for e in phase_errors),
+        "note": (
+            "Ablación batch=1 (_single_position) vs Montgomery. "
+            "Interpretación: errores solo con batch>1 → sospecha Montgomery; "
+            "errores también con batch=1 → sospecha phase_kick/HMR/Forney "
+            "por posición. Qwen Code 1.5 no interviene."
+        ),
+    }
+
+
+
 def _bits_matrix(vals, nbits):
     """Matriz de bits para write_across_shots: forma (nbits, nshots).
 

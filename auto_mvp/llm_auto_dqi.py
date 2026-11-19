@@ -41,9 +41,9 @@ Uso::
 
     python -m auto_mvp.llm_auto_dqi --target-S 1e13 --max-proposals 6
 
-La llave NO existe: el modelo es local (Qwen2.5-Coder-1.5B-Instruct,
-GGUF Q4_K_M, llama-cpp-python, temp 0.7) y corre en la máquina, sin
-API. Si el modelo no está disponible (falta el GGUF o
+La llave NO existe: el único LLM es Qwen Code 1.5
+(Qwen2.5-Coder-1.5B-Instruct, GGUF Q4_K_M, llama-cpp-python, temp 0.7),
+local en la máquina, sin API. No se usan Gemini ni Groq. Si el modelo no está disponible (falta el GGUF o
 llama-cpp-python), el corredor sigue con los deltas por defecto y
 lo dice en el resultado (`llm_fallbacks`). El GGUF (~1 GB) no va en
 el repo: se baja de HuggingFace la primera vez (`LLM_MODEL_PATH` o
