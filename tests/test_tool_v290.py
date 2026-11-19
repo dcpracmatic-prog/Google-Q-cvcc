@@ -25,9 +25,13 @@ def test_benchmark_incluye_fanout(tmp_path):
     assert f["stats"]["total_potential_T"] == 0
     assert f["valid"] is True
     assert f["delta_S"] == 0
-    # La medida invsqrt no cuenta Toffolis: delta_toffoli es None
-    # (igual que en peephole y rotation_merge para esta tarea).
-    assert f["delta_toffoli"] is None
+    # El fan-out no reescribe el circuito: no toca los Toffolis
+    # (delta 0, igual que peephole, rotation_merge y commuting
+    # para esta semilla, que tampoco los cambian). Antes el test
+    # pedía None porque la medida invsqrt no devolvía el conteo;
+    # hoy sí lo devuelve (base_toffoli = 1325.75), así que el
+    # delta es 0, no None. (v2.17.9.)
+    assert f["delta_toffoli"] == 0
     assert any(c.startswith("fanout: potencial 0 T")
                for c in rep["comments"])
 

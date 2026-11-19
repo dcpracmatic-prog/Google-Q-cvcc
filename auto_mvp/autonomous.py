@@ -102,6 +102,10 @@ TEMP = 0.7
 # así que NUNCA había mejora. Medido: batch=1 da S=3.9983e10
 # (9.5% mejor que la base 4.418e10) porque Q baja de 1139 a 1067
 # y Q^2 domina S = R*Q^2*T. Se añaden 1, 2, 3.
+# v2.17.9: el scan usa siempre inversos directos (Montgomery
+# desactivado por fase), así que `batch` YA NO cambia Q/T/S: todos
+# los batch dan Q=1067, T=29481, S=3.9983e10 a n=10 (el mejor
+# anterior). El knob se conserva por compatibilidad.
 _DEFAULT_BATCH = (1, 2, 3, 4, 8, 17, 36)
 _DEFAULT_NSLOT_EXTRA = (0, 2, 6)
 

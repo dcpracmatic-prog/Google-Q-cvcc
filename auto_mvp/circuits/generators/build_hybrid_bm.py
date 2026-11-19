@@ -46,24 +46,30 @@ Alcance honesto (2026-11-14, medido):
   sigma 24/24, scan limpio 12/12, circuito completo S restaurado
   10/10 y ancillas a |0> 6/6+6/6).
 - El circuito usa por defecto las operaciones GF nativas de kickmix
-  (``ixor_gf2_mul``, 63 T/mult). Con ``toom3=True`` usa el
-  multiplicador Toom-3 vendoreado (``toom3.emit_ixor_toom3``, 45
-  T/mult, verificado 4/4 en el repo incl. target no cero; Q no sube
-  porque las ancillas se reutilizan). Medido a escala completa
-  (n=70, m=4095, batch=17): Toom-3 baja T de 1,900,947 a 1,519,563
-  (-20.1%) y S de 1.04e14 a 8.35e13, con Q igual (6,791).
+  (``ixor_gf2_mul``, 63 T/mult). El multiplicador Toom-3 vendoreado
+  (``toom3.emit_ixor_toom3``, 45 T/mult) está DESACTIVADO: rompe la
+  restauración de B/Lreg en ``bm_backward``, así que ``_ixor_mul``
+  ignora el flag y ``toom3=True`` da el mismo circuito que el nativo.
   El knob `toom3` lo mueve el LLM estratega
-  (``auto_mvp/llm_auto_dqi.py``) durante la ejecución.
-- Medido a escala completa (n=70, m=4095, batch=17): Q=6,791,
-  T=1,900,947 (nativo) / 1,519,563 (Toom-3), S proyectado = 1.04e14
-  / 8.35e13 (R=1.1912605). Es 4.3x / 3.4x PEOR que el baseline
-  (2.44e13) y 5.2x / 4.2x peor que el ensamble (1.998e13), y muy
-  lejos del público híbrido (3.77e11). La limpieza de temporales
-  (paso 22: mult/ainv/scaffold, hist_mult) ya está aplicada y bajó Q
-  de 10,991 a 6,791. Lo que falta para competir es la reutilización
-  de slots S + reconstrucción de B (``PLAN_SLOT_REUSE.md``) para bajar
-  Q hacia ~1,414. Eso es el siguiente paso, no un resultado de este
-  generador.
+  (``auto_mvp/llm_auto_dqi.py``) durante la ejecución, pero hoy no
+  cambia el circuito.
+- CORRECCIÓN v2.17.9 (2026-11-18, MEDIDO): el scan usa inversos
+  directos por posición (`_single_position`); la inversión por lotes
+  Montgomery está desactivada porque CORROMPE la fase DQI en kickmix
+  1.0.0 (ver `hybrid_scan` y notes/v2.17.9.md). Medido a escala
+  completa (n=70, m=4095, batch=17, sin efecto desde v2.17.9):
+  Q=6,407, T=2,283,981 (nativo), S proyectado = 1.12e14
+  (R=1.1912605). Es 4.6x peor que el baseline (2.44e13) y 5.6x peor
+  que el ensamble (1.998e13), y muy lejos del público híbrido
+  (3.77e11). El S Montgomery con Toom-4 (7.99e13) era FICTICIO:
+  ese circuito nunca pasó la verificación de fase (0 PASS en 510
+  intentos); el S correcto es el de inversos directos. La limpieza
+  de temporales (paso 22: mult/ainv/scaffold, hist_mult) ya está
+  aplicada y bajó Q de 10,991 a 6,791; los inversos directos bajan
+  Q a 6,407 (sin cadena p/q). Lo que falta para competir es la
+  reutilización de slots S + reconstrucción de B
+  (``PLAN_SLOT_REUSE.md``) para bajar Q hacia ~1,414. Eso es el
+  siguiente paso, no un resultado de este generador.
 - Verificado a escala chica (n <= 10) contra la referencia clásica.
   La construcción a escala completa (n=70, m=4095) usa los mismos
   bloques; su Q/T se mide con ``--measure`` (solo construcción).
@@ -626,6 +632,19 @@ def phase_kick(bld, s_acc, o_acc, inv_reg, mask_reg):
 def montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg):
     """Un lote Montgomery del hybrid scan (b posiciones j0..j0+b-1).
 
+    ADVERTENCIA v2.17.9 (2026-11-18, MEDIDO): esta función CORROMPE
+    la fase DQI en kickmix 1.0.0 y NO se usa. Cualquier lote >= 2 da
+    2-5 errores de fase de 8 shots en verify_small (n=10, m=15),
+    con sigma y registros intactos y con los inversos derivados
+    correctos en valor (Exp C3: 0/32 mismatches). La bisección
+    (Exp A-I, notes/v2.17.9.md) exoneró la limpieza final, los
+    valores derivados, del_gf2_mul, el multiplicador nativo y
+    Toom-3, y mostró que solo pasan las patadas con inversos
+    directos y sin maquinaria Montgomery viva: la copia CNOT de un
+    inverso (Exp H) y las multiplicaciones de la cadena q (Exp I)
+    rompen la fase por sí solas. Se conserva solo como referencia;
+    `hybrid_scan` usa siempre `_single_position`.
+
     `C`: sigma (lista de registros, C[0..L]). `OMG`: omega (lista de
     registros). `E`: lista de b registros clásicos (máscaras M_j).
     `m`: longitud del código (4095). `zero_reg`: registro |0> compartido.
@@ -728,26 +747,29 @@ def montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg):
 
 
 def hybrid_scan(bld, C, OMG, E, m, batch, L, zero_reg):
-    """El hybrid scan completo: recorre las m posiciones en lotes.
+    """El hybrid scan completo: recorre las m posiciones.
+
+    CORRECCIÓN v2.17.9 (2026-11-18, MEDIDO): el scan usa SIEMPRE
+    inversos directos por posición (`_single_position`), sin
+    Montgomery. La inversión por lotes (`montgomery_batch`) corrompe
+    la fase DQI en kickmix 1.0.0: cualquier lote >= 2 da 2-5 errores
+    de fase de 8 shots en verify_small, con sigma y registros
+    intactos (Exp A-I, notes/v2.17.9.md). Solo la configuración sin
+    maquinaria Montgomery — inversos directos, uno por posición —
+    pasa 8/8. El parámetro `batch` queda sin efecto para el scan
+    (se conserva por compatibilidad de API y para el conteo
+    informativo de lotes); el costo es 1 inversión por posición
+    en vez de 1 por lote.
 
     `C`: sigma, `OMG`: omega, `E`: lista de m registros clásicos
-    (máscaras M_j, entradas). `batch`: tamaño de lote Montgomery
-    (17 por defecto, verificado). Aplica la fase DQI de todas las
-    posiciones. Es el bucle `scan` del público, con la misma idea
-    (lotes + reciclaje), pero sobre el sigma del BM.
+    (máscaras M_j, entradas). `batch`: tamaño de lote (sin efecto
+    desde v2.17.9). Aplica la fase DQI de todas las posiciones.
     """
-    nbatches = (m + batch - 1) // batch
-    for bi in range(nbatches):
-        j0 = bi * batch
-        b = min(batch, m - j0)
-        if b < 2:
-            # Un lote de 1 posición no admite Montgomery; se evalúa
-            # directo (1 inversión). Raro (solo la cola si m % batch
-            # == 1); se deja como inversión simple.
-            _single_position(bld, C, OMG, E, L, j0, m, zero_reg)
-            continue
-        montgomery_batch(bld, C, OMG, E, b, L, j0, m, zero_reg)
-    return {"batches": nbatches}
+    for j in range(m):
+        _single_position(bld, C, OMG, E, L, j, m, zero_reg)
+    nbatches = (m + batch - 1) // batch if batch and batch > 0 else m
+    return {"batches": nbatches, "mode": "directo",
+            "note": "Montgomery desactivado por fase (v2.17.9)"}
 
 
 def _single_position(bld, C, OMG, E, L, j, m, zero_reg):
@@ -1148,9 +1170,19 @@ def diagnose_phase_ablation(n=10, m=15, seed=12345, nshots=8, toom3=False,
                             batches=(1, 4, 8)):
     """Ablación de fase: compara batch=1 (solo _single_position) vs lotes.
 
+    HISTÓRICO: antes de v2.17.9, ``batch=1`` forzaba el camino
+    ``_single_position`` en cada j (sin Montgomery) y ``batch>=2``
+    usaba ``montgomery_batch`` (y cola single si aplica). La ablación
+    localizó el defecto en el lote Montgomery (batch=1 limpio,
+    batch>=2 con 2-5 errores de fase de 8). Desde v2.17.9 el scan
+    usa siempre inversos directos (`hybrid_scan` ignora `batch`),
+    así que esta ablación es ahora una comprobación de regresión:
+    todos los lotes deben salir limpios. Si algún lote falla, el
+    defecto volvió.
+
     - ``batch=1`` fuerza el camino ``_single_position`` en cada j
       (sin Montgomery).
-    - ``batch>=2`` usa ``montgomery_batch`` (y cola single si aplica).
+    - ``batch>=2`` usaba ``montgomery_batch`` (y cola single si aplica).
 
     Si batch=1 falla igual que batch>1, el defecto no es exclusivo del
     lote Montgomery. Si solo fallan los lotes, el sospechoso es
@@ -1169,8 +1201,11 @@ def diagnose_phase_ablation(n=10, m=15, seed=12345, nshots=8, toom3=False,
         try:
             res = verify_small(n=n, m=m, batch=b_eff, seed=seed,
                                nshots=nshots, toom3=toom3)
-            path = ("single_position_only" if b_eff == 1
-                    else "montgomery_batch")
+            # v2.17.9: el scan usa siempre inversos directos; la
+            # etiqueta "montgomery_batch" es histórica (el camino
+            # Montgomery está desactivado por fase).
+            path = ("directo_single" if b_eff == 1
+                    else "directo_lote_historico_montgomery")
             rows.append({
                 "batch": b_eff,
                 "path": path,
@@ -1188,8 +1223,8 @@ def diagnose_phase_ablation(n=10, m=15, seed=12345, nshots=8, toom3=False,
         except Exception as exc:  # pragma: no cover - entorno sin kickmix
             rows.append({
                 "batch": b_eff,
-                "path": ("single_position_only" if b_eff == 1
-                         else "montgomery_batch"),
+                "path": ("directo_single" if b_eff == 1
+                         else "directo_lote_historico_montgomery"),
                 "valid": None,
                 "phase_correct": None,
                 "phase_total": None,
@@ -1204,10 +1239,11 @@ def diagnose_phase_ablation(n=10, m=15, seed=12345, nshots=8, toom3=False,
         "rows": rows,
         "all_paths_phase_clean": bool(phase_errors) and all(e == 0 for e in phase_errors),
         "note": (
-            "Ablación batch=1 (_single_position) vs Montgomery. "
-            "Interpretación: errores solo con batch>1 → sospecha Montgomery; "
-            "errores también con batch=1 → sospecha phase_kick/HMR/Forney "
-            "por posición. Qwen Code 1.5 no interviene."
+            "Ablación batch=1 vs lotes (v2.17.9: todos directos, "
+            "Montgomery desactivado por fase). Interpretación: errores "
+            "solo con batch>1 → sospecha Montgomery; errores también "
+            "con batch=1 → sospecha phase_kick/HMR/Forney por posición. "
+            "Qwen Code 1.5 no interviene."
         ),
     }
 

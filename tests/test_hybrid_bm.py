@@ -39,7 +39,9 @@ def test_circuito_completo_sin_basura():
     circ, info = build_hybrid_bm_circuit(
         n=n, m=m, batch=batch, nslot=nslot, toom3=True)
     q = int(info["qubits"])
-    assert q == 1139
+    # v2.17.9: Q 1139 -> 1067 (inversos directos, sin cadena
+    # Montgomery p/q; la fase ahora es correcta, ver notes/v2.17.9.md).
+    assert q == 1067
     S_qubits = km.array([km.q(k) for k in range(n * DEGREE)])
     E_bits = km.array([km.b(k) for k in range(m * DEGREE)])
     ancilla = km.array([km.q(k) for k in range(n * DEGREE, q)])
@@ -178,3 +180,16 @@ def test_diagnose_phase_helpers_are_exported():
     assert "certificación" in (gen.diagnose_phase_positions.__doc__ or "").lower() or (
         "no es certificación" in (gen.diagnose_phase_positions.__doc__ or "").lower()
     )
+
+
+def test_verify_small_phase_ok_all_batches():
+    """v2.17.9: el scan es fase-correcto para cualquier batch.
+
+    Antes, batch>=2 (Montgomery) daba 2-5 errores de fase de 8 y
+    solo batch=1 pasaba. Con inversos directos, todos los batch
+    pasan 8/8. Si Montgomery se reactiva, este test lo caza.
+    """
+    for batch in (1, 2, 4, 8):
+        res = verify_small(n=10, m=15, batch=batch, seed=12345, nshots=8)
+        assert res["scan_phase_errors"] == 0, f"batch={batch}"
+        assert res["valid"] is True

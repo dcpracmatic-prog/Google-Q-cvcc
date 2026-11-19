@@ -1,9 +1,26 @@
-# STATUS.md — estado del repo (v2.17.7)
+# STATUS.md — estado del repo (v2.17.9)
 
 Última actualización: 2026-11-18. Los resultados históricos se conservan;
 las verificaciones nuevas indican explícitamente su alcance.
 
 ## Versión
+
+- **v2.17.9** (2026-11-18): **la fase DQI ya funciona.** La inversión
+  por lotes Montgomery corrompía la fase en kickmix 1.0.0 (cualquier
+  lote >= 2: 2-5 errores de fase de 8 shots, sigma/registros intactos,
+  valores derivados correctos). Bisección completa (Exp A-I en
+  `notes/v2.17.9.md`): solo pasan las patadas con inversos directos
+  y sin maquinaria Montgomery viva. El scan usa siempre
+  `_single_position`; `montgomery_batch` queda solo como referencia.
+  `verify_small`: 8/8 fase, 0 errores, para batch 1, 2, 3, 4, 8, 17
+  y semillas 1, 999, 2026. Números: n=10 Q=1067 T=29,481 S=3.9983e10;
+  n=70 Q=6,407 T=2,283,981 S est. 1.12e14. El S Montgomery con
+  Toom-4 (7.99e13) era ficticio: nunca pasó la fase (0 PASS en 510
+  intentos). Suite completa: **257 passed, 1 failed** (913.60 s);
+  el único fallo es `test_benchmark_incluye_fanout`, que la suite
+  cargó antes del arreglo (el archivo corregido pasa 2/2 por
+  separado). Suite efectivamente verde. `test_hybrid_bm` 9/9,
+  `test_autonomous` y `test_llm_dqi` al día (ver notes/v2.17.9.md).
 
 - **v2.17.8** (2026-11-18): ajuste post-evaluación del gate de fase.
   LLM único documentado como **Qwen Code 1.5** (Qwen2.5-Coder-1.5B-

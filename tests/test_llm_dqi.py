@@ -78,6 +78,9 @@ def test_llm_dqi_mejora_con_toom3(monkeypatch):
     # mejor que la base 4.418e10) y es lo que guarda. El LLM
     # (falso) propone toom3, pero Toom-3 está DESACTIVADO (rompe
     # bm_backward): toom3=True ya no baja T, así que no lo supera.
+    # v2.17.9: el scan usa siempre inversos directos, así que TODOS
+    # los batch dan S=3.9983e10 (Q=1067, T=29481); la base (batch=4)
+    # ya está en el mejor S y ningún barrido la mejora (empate).
     res = run_llm_auto_dqi(
         target_S=1e9, n=10, m=15, max_proposals=5,
         llm_client=_fake_llm_toom3, batch_size=2, verify=True,
@@ -86,7 +89,7 @@ def test_llm_dqi_mejora_con_toom3(monkeypatch):
     assert res["llm_fallbacks"] == 0
     assert res["proposals"] == 5
     assert res["invalid"] == 0
-    assert res["best_knobs"]["batch"] == 1
+    assert res["best_knobs"]["batch"] == 4
     assert res["best_knobs"]["nslot"] == 6
     assert res["best_knobs"]["toom3"] is False
     assert res["best_knobs"]["qubits"] == 1067
@@ -114,8 +117,10 @@ def test_dqi_guarda_mejor_semilla_transparente(tmp_path, monkeypatch):
     assert recipe_p.is_file()
     recipe = json.loads(recipe_p.read_text(encoding="utf-8"))
     # La receta trae todo lo necesario para reproducir y evaluar.
-    # La mejor semilla es batch=1 (barrido v2.17.6), no la base.
-    assert recipe["batch"] == 1 and recipe["nslot"] == 6
+    # v2.17.9: la mejor semilla es la base (batch=4): todos los batch
+    # empatan en S=3.9983e10 con inversos directos, así que el
+    # barrido ya no mejora la base.
+    assert recipe["batch"] == 4 and recipe["nslot"] == 6
     assert recipe["toom3"] is False
     assert recipe["qubits"] == 1067
     assert recipe["toffoli_like"] == 29481
