@@ -1,0 +1,2014 @@
+{
+  "name": "gf212_mul_karatsuba",
+  "inputs": [
+    "a",
+    "b"
+  ],
+  "outputs": [
+    "c"
+  ],
+  "qubit_budget": 892,
+  "nodes": [
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$101",
+      "op": "AND",
+      "args": [
+        "4",
+        "18"
+      ],
+      "out": "38"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$103",
+      "op": "AND",
+      "args": [
+        "4",
+        "19"
+      ],
+      "out": "39"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$105",
+      "op": "AND",
+      "args": [
+        "5",
+        "14"
+      ],
+      "out": "40"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$107",
+      "op": "AND",
+      "args": [
+        "5",
+        "15"
+      ],
+      "out": "41"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$109",
+      "op": "AND",
+      "args": [
+        "5",
+        "16"
+      ],
+      "out": "42"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$111",
+      "op": "AND",
+      "args": [
+        "5",
+        "17"
+      ],
+      "out": "43"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$113",
+      "op": "AND",
+      "args": [
+        "5",
+        "18"
+      ],
+      "out": "44"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$115",
+      "op": "AND",
+      "args": [
+        "5",
+        "19"
+      ],
+      "out": "45"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$117",
+      "op": "AND",
+      "args": [
+        "6",
+        "14"
+      ],
+      "out": "46"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$119",
+      "op": "AND",
+      "args": [
+        "6",
+        "15"
+      ],
+      "out": "47"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$121",
+      "op": "AND",
+      "args": [
+        "6",
+        "16"
+      ],
+      "out": "48"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$123",
+      "op": "AND",
+      "args": [
+        "6",
+        "17"
+      ],
+      "out": "49"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$125",
+      "op": "AND",
+      "args": [
+        "6",
+        "18"
+      ],
+      "out": "50"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$127",
+      "op": "AND",
+      "args": [
+        "6",
+        "19"
+      ],
+      "out": "51"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$129",
+      "op": "AND",
+      "args": [
+        "7",
+        "14"
+      ],
+      "out": "52"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$131",
+      "op": "AND",
+      "args": [
+        "7",
+        "15"
+      ],
+      "out": "53"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$133",
+      "op": "AND",
+      "args": [
+        "7",
+        "16"
+      ],
+      "out": "54"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$135",
+      "op": "AND",
+      "args": [
+        "7",
+        "17"
+      ],
+      "out": "55"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$137",
+      "op": "AND",
+      "args": [
+        "7",
+        "18"
+      ],
+      "out": "56"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$139",
+      "op": "AND",
+      "args": [
+        "7",
+        "19"
+      ],
+      "out": "57"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$148",
+      "op": "AND",
+      "args": [
+        "8",
+        "20"
+      ],
+      "out": "58"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$150",
+      "op": "AND",
+      "args": [
+        "8",
+        "21"
+      ],
+      "out": "59"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$152",
+      "op": "AND",
+      "args": [
+        "8",
+        "22"
+      ],
+      "out": "60"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$154",
+      "op": "AND",
+      "args": [
+        "8",
+        "23"
+      ],
+      "out": "61"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$156",
+      "op": "AND",
+      "args": [
+        "8",
+        "24"
+      ],
+      "out": "62"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$158",
+      "op": "AND",
+      "args": [
+        "8",
+        "25"
+      ],
+      "out": "63"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$160",
+      "op": "AND",
+      "args": [
+        "9",
+        "20"
+      ],
+      "out": "64"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$162",
+      "op": "AND",
+      "args": [
+        "9",
+        "21"
+      ],
+      "out": "65"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$164",
+      "op": "AND",
+      "args": [
+        "9",
+        "22"
+      ],
+      "out": "66"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$166",
+      "op": "AND",
+      "args": [
+        "9",
+        "23"
+      ],
+      "out": "67"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$168",
+      "op": "AND",
+      "args": [
+        "9",
+        "24"
+      ],
+      "out": "68"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$170",
+      "op": "AND",
+      "args": [
+        "9",
+        "25"
+      ],
+      "out": "69"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$172",
+      "op": "AND",
+      "args": [
+        "10",
+        "20"
+      ],
+      "out": "70"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$174",
+      "op": "AND",
+      "args": [
+        "10",
+        "21"
+      ],
+      "out": "71"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$176",
+      "op": "AND",
+      "args": [
+        "10",
+        "22"
+      ],
+      "out": "72"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$178",
+      "op": "AND",
+      "args": [
+        "10",
+        "23"
+      ],
+      "out": "73"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$180",
+      "op": "AND",
+      "args": [
+        "10",
+        "24"
+      ],
+      "out": "74"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$182",
+      "op": "AND",
+      "args": [
+        "10",
+        "25"
+      ],
+      "out": "75"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$184",
+      "op": "AND",
+      "args": [
+        "11",
+        "20"
+      ],
+      "out": "76"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$186",
+      "op": "AND",
+      "args": [
+        "11",
+        "21"
+      ],
+      "out": "77"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$188",
+      "op": "AND",
+      "args": [
+        "11",
+        "22"
+      ],
+      "out": "78"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$190",
+      "op": "AND",
+      "args": [
+        "11",
+        "23"
+      ],
+      "out": "79"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$192",
+      "op": "AND",
+      "args": [
+        "11",
+        "24"
+      ],
+      "out": "80"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$194",
+      "op": "AND",
+      "args": [
+        "11",
+        "25"
+      ],
+      "out": "81"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$196",
+      "op": "AND",
+      "args": [
+        "12",
+        "20"
+      ],
+      "out": "82"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$198",
+      "op": "AND",
+      "args": [
+        "12",
+        "21"
+      ],
+      "out": "83"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$200",
+      "op": "AND",
+      "args": [
+        "12",
+        "22"
+      ],
+      "out": "84"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$202",
+      "op": "AND",
+      "args": [
+        "12",
+        "23"
+      ],
+      "out": "85"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$204",
+      "op": "AND",
+      "args": [
+        "12",
+        "24"
+      ],
+      "out": "86"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$206",
+      "op": "AND",
+      "args": [
+        "12",
+        "25"
+      ],
+      "out": "87"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$208",
+      "op": "AND",
+      "args": [
+        "13",
+        "20"
+      ],
+      "out": "88"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$210",
+      "op": "AND",
+      "args": [
+        "13",
+        "21"
+      ],
+      "out": "89"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$212",
+      "op": "AND",
+      "args": [
+        "13",
+        "22"
+      ],
+      "out": "90"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$214",
+      "op": "AND",
+      "args": [
+        "13",
+        "23"
+      ],
+      "out": "91"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$216",
+      "op": "AND",
+      "args": [
+        "13",
+        "24"
+      ],
+      "out": "92"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$218",
+      "op": "AND",
+      "args": [
+        "13",
+        "25"
+      ],
+      "out": "93"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$227",
+      "op": "AND",
+      "args": [
+        "94",
+        "95"
+      ],
+      "out": "96"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$229",
+      "op": "AND",
+      "args": [
+        "94",
+        "97"
+      ],
+      "out": "98"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$231",
+      "op": "AND",
+      "args": [
+        "94",
+        "99"
+      ],
+      "out": "100"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$233",
+      "op": "AND",
+      "args": [
+        "94",
+        "101"
+      ],
+      "out": "102"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$235",
+      "op": "AND",
+      "args": [
+        "94",
+        "103"
+      ],
+      "out": "104"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$237",
+      "op": "AND",
+      "args": [
+        "94",
+        "105"
+      ],
+      "out": "106"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$239",
+      "op": "AND",
+      "args": [
+        "107",
+        "95"
+      ],
+      "out": "108"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$241",
+      "op": "AND",
+      "args": [
+        "107",
+        "97"
+      ],
+      "out": "109"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$243",
+      "op": "AND",
+      "args": [
+        "107",
+        "99"
+      ],
+      "out": "110"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$245",
+      "op": "AND",
+      "args": [
+        "107",
+        "101"
+      ],
+      "out": "111"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$247",
+      "op": "AND",
+      "args": [
+        "107",
+        "103"
+      ],
+      "out": "112"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$249",
+      "op": "AND",
+      "args": [
+        "107",
+        "105"
+      ],
+      "out": "113"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$251",
+      "op": "AND",
+      "args": [
+        "114",
+        "95"
+      ],
+      "out": "115"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$253",
+      "op": "AND",
+      "args": [
+        "114",
+        "97"
+      ],
+      "out": "116"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$255",
+      "op": "AND",
+      "args": [
+        "114",
+        "99"
+      ],
+      "out": "117"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$257",
+      "op": "AND",
+      "args": [
+        "114",
+        "101"
+      ],
+      "out": "118"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$259",
+      "op": "AND",
+      "args": [
+        "114",
+        "103"
+      ],
+      "out": "119"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$261",
+      "op": "AND",
+      "args": [
+        "114",
+        "105"
+      ],
+      "out": "120"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$263",
+      "op": "AND",
+      "args": [
+        "121",
+        "95"
+      ],
+      "out": "122"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$265",
+      "op": "AND",
+      "args": [
+        "121",
+        "97"
+      ],
+      "out": "123"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$267",
+      "op": "AND",
+      "args": [
+        "121",
+        "99"
+      ],
+      "out": "124"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$269",
+      "op": "AND",
+      "args": [
+        "121",
+        "101"
+      ],
+      "out": "125"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$271",
+      "op": "AND",
+      "args": [
+        "121",
+        "103"
+      ],
+      "out": "126"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$273",
+      "op": "AND",
+      "args": [
+        "121",
+        "105"
+      ],
+      "out": "127"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$275",
+      "op": "AND",
+      "args": [
+        "128",
+        "95"
+      ],
+      "out": "129"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$277",
+      "op": "AND",
+      "args": [
+        "128",
+        "97"
+      ],
+      "out": "130"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$279",
+      "op": "AND",
+      "args": [
+        "128",
+        "99"
+      ],
+      "out": "131"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$281",
+      "op": "AND",
+      "args": [
+        "128",
+        "101"
+      ],
+      "out": "132"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$283",
+      "op": "AND",
+      "args": [
+        "128",
+        "103"
+      ],
+      "out": "133"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$285",
+      "op": "AND",
+      "args": [
+        "128",
+        "105"
+      ],
+      "out": "134"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$287",
+      "op": "AND",
+      "args": [
+        "135",
+        "95"
+      ],
+      "out": "136"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$289",
+      "op": "AND",
+      "args": [
+        "135",
+        "97"
+      ],
+      "out": "137"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$291",
+      "op": "AND",
+      "args": [
+        "135",
+        "99"
+      ],
+      "out": "138"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$293",
+      "op": "AND",
+      "args": [
+        "135",
+        "101"
+      ],
+      "out": "139"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$295",
+      "op": "AND",
+      "args": [
+        "135",
+        "103"
+      ],
+      "out": "140"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$297",
+      "op": "AND",
+      "args": [
+        "135",
+        "105"
+      ],
+      "out": "141"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$69",
+      "op": "AND",
+      "args": [
+        "2",
+        "14"
+      ],
+      "out": "142"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$71",
+      "op": "AND",
+      "args": [
+        "2",
+        "15"
+      ],
+      "out": "143"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$73",
+      "op": "AND",
+      "args": [
+        "2",
+        "16"
+      ],
+      "out": "144"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$75",
+      "op": "AND",
+      "args": [
+        "2",
+        "17"
+      ],
+      "out": "145"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$77",
+      "op": "AND",
+      "args": [
+        "2",
+        "18"
+      ],
+      "out": "146"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$79",
+      "op": "AND",
+      "args": [
+        "2",
+        "19"
+      ],
+      "out": "147"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$81",
+      "op": "AND",
+      "args": [
+        "3",
+        "14"
+      ],
+      "out": "148"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$83",
+      "op": "AND",
+      "args": [
+        "3",
+        "15"
+      ],
+      "out": "149"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$85",
+      "op": "AND",
+      "args": [
+        "3",
+        "16"
+      ],
+      "out": "150"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$87",
+      "op": "AND",
+      "args": [
+        "3",
+        "17"
+      ],
+      "out": "151"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$89",
+      "op": "AND",
+      "args": [
+        "3",
+        "18"
+      ],
+      "out": "152"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$91",
+      "op": "AND",
+      "args": [
+        "3",
+        "19"
+      ],
+      "out": "153"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$93",
+      "op": "AND",
+      "args": [
+        "4",
+        "14"
+      ],
+      "out": "154"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$95",
+      "op": "AND",
+      "args": [
+        "4",
+        "15"
+      ],
+      "out": "155"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$97",
+      "op": "AND",
+      "args": [
+        "4",
+        "16"
+      ],
+      "out": "156"
+    },
+    {
+      "id": "$and$gf212_mul_karatsuba.v:63$99",
+      "op": "AND",
+      "args": [
+        "4",
+        "17"
+      ],
+      "out": "157"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$464",
+      "op": "NOT",
+      "args": [
+        "158"
+      ],
+      "out": "159"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$466",
+      "op": "NOT",
+      "args": [
+        "160"
+      ],
+      "out": "161"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$468",
+      "op": "NOT",
+      "args": [
+        "162"
+      ],
+      "out": "163"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$470",
+      "op": "NOT",
+      "args": [
+        "164"
+      ],
+      "out": "165"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$472",
+      "op": "NOT",
+      "args": [
+        "166"
+      ],
+      "out": "167"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$474",
+      "op": "NOT",
+      "args": [
+        "168"
+      ],
+      "out": "169"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$476",
+      "op": "NOT",
+      "args": [
+        "170"
+      ],
+      "out": "171"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$478",
+      "op": "NOT",
+      "args": [
+        "172"
+      ],
+      "out": "173"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$480",
+      "op": "NOT",
+      "args": [
+        "174"
+      ],
+      "out": "175"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$482",
+      "op": "NOT",
+      "args": [
+        "176"
+      ],
+      "out": "177"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$484",
+      "op": "NOT",
+      "args": [
+        "178"
+      ],
+      "out": "179"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$486",
+      "op": "NOT",
+      "args": [
+        "180"
+      ],
+      "out": "181"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$488",
+      "op": "NOT",
+      "args": [
+        "182"
+      ],
+      "out": "183"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$490",
+      "op": "NOT",
+      "args": [
+        "184"
+      ],
+      "out": "185"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$492",
+      "op": "NOT",
+      "args": [
+        "186"
+      ],
+      "out": "187"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$494",
+      "op": "NOT",
+      "args": [
+        "188"
+      ],
+      "out": "189"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$496",
+      "op": "NOT",
+      "args": [
+        "190"
+      ],
+      "out": "191"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$498",
+      "op": "NOT",
+      "args": [
+        "192"
+      ],
+      "out": "193"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$500",
+      "op": "NOT",
+      "args": [
+        "194"
+      ],
+      "out": "195"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$502",
+      "op": "NOT",
+      "args": [
+        "196"
+      ],
+      "out": "197"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$504",
+      "op": "NOT",
+      "args": [
+        "198"
+      ],
+      "out": "199"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$506",
+      "op": "NOT",
+      "args": [
+        "200"
+      ],
+      "out": "201"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$508",
+      "op": "NOT",
+      "args": [
+        "202"
+      ],
+      "out": "203"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$510",
+      "op": "NOT",
+      "args": [
+        "204"
+      ],
+      "out": "205"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$512",
+      "op": "NOT",
+      "args": [
+        "206"
+      ],
+      "out": "207"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$514",
+      "op": "NOT",
+      "args": [
+        "208"
+      ],
+      "out": "209"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$516",
+      "op": "NOT",
+      "args": [
+        "210"
+      ],
+      "out": "211"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$518",
+      "op": "NOT",
+      "args": [
+        "212"
+      ],
+      "out": "213"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$520",
+      "op": "NOT",
+      "args": [
+        "214"
+      ],
+      "out": "215"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$522",
+      "op": "NOT",
+      "args": [
+        "216"
+      ],
+      "out": "217"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$524",
+      "op": "NOT",
+      "args": [
+        "218"
+      ],
+      "out": "219"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$526",
+      "op": "NOT",
+      "args": [
+        "220"
+      ],
+      "out": "221"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$528",
+      "op": "NOT",
+      "args": [
+        "222"
+      ],
+      "out": "223"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$530",
+      "op": "NOT",
+      "args": [
+        "224"
+      ],
+      "out": "225"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$532",
+      "op": "NOT",
+      "args": [
+        "226"
+      ],
+      "out": "227"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$534",
+      "op": "NOT",
+      "args": [
+        "228"
+      ],
+      "out": "229"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$536",
+      "op": "NOT",
+      "args": [
+        "230"
+      ],
+      "out": "231"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$538",
+      "op": "NOT",
+      "args": [
+        "232"
+      ],
+      "out": "233"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$540",
+      "op": "NOT",
+      "args": [
+        "234"
+      ],
+      "out": "235"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$542",
+      "op": "NOT",
+      "args": [
+        "236"
+      ],
+      "out": "237"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$544",
+      "op": "NOT",
+      "args": [
+        "238"
+      ],
+      "out": "239"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$546",
+      "op": "NOT",
+      "args": [
+        "240"
+      ],
+      "out": "241"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$548",
+      "op": "NOT",
+      "args": [
+        "242"
+      ],
+      "out": "243"
+    },
+    {
+      "id": "$auto$opt_expr.cc:615:replace_const_cells$550",
+      "op": "NOT",
+      "args": [
+        "142"
+      ],
+      "out": "244"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$100",
+      "op": "XOR",
+      "args": [
+        "305",
+        "157"
+      ],
+      "out": "306"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$102",
+      "op": "XOR",
+      "args": [
+        "153",
+        "38"
+      ],
+      "out": "307"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$106",
+      "op": "XOR",
+      "args": [
+        "308",
+        "40"
+      ],
+      "out": "220"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$108",
+      "op": "XOR",
+      "args": [
+        "309",
+        "41"
+      ],
+      "out": "310"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$110",
+      "op": "XOR",
+      "args": [
+        "306",
+        "42"
+      ],
+      "out": "311"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$112",
+      "op": "XOR",
+      "args": [
+        "307",
+        "43"
+      ],
+      "out": "312"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$114",
+      "op": "XOR",
+      "args": [
+        "39",
+        "44"
+      ],
+      "out": "313"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$118",
+      "op": "XOR",
+      "args": [
+        "310",
+        "46"
+      ],
+      "out": "212"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$120",
+      "op": "XOR",
+      "args": [
+        "311",
+        "47"
+      ],
+      "out": "314"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$122",
+      "op": "XOR",
+      "args": [
+        "312",
+        "48"
+      ],
+      "out": "315"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$124",
+      "op": "XOR",
+      "args": [
+        "313",
+        "49"
+      ],
+      "out": "316"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$126",
+      "op": "XOR",
+      "args": [
+        "45",
+        "50"
+      ],
+      "out": "317"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$130",
+      "op": "XOR",
+      "args": [
+        "314",
+        "52"
+      ],
+      "out": "204"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$132",
+      "op": "XOR",
+      "args": [
+        "315",
+        "53"
+      ],
+      "out": "265"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$134",
+      "op": "XOR",
+      "args": [
+        "316",
+        "54"
+      ],
+      "out": "266"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$136",
+      "op": "XOR",
+      "args": [
+        "317",
+        "55"
+      ],
+      "out": "267"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$138",
+      "op": "XOR",
+      "args": [
+        "51",
+        "56"
+      ],
+      "out": "268"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$161",
+      "op": "XOR",
+      "args": [
+        "59",
+        "64"
+      ],
+      "out": "280"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$163",
+      "op": "XOR",
+      "args": [
+        "60",
+        "65"
+      ],
+      "out": "318"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$165",
+      "op": "XOR",
+      "args": [
+        "61",
+        "66"
+      ],
+      "out": "319"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$167",
+      "op": "XOR",
+      "args": [
+        "62",
+        "67"
+      ],
+      "out": "320"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$169",
+      "op": "XOR",
+      "args": [
+        "63",
+        "68"
+      ],
+      "out": "321"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$173",
+      "op": "XOR",
+      "args": [
+        "318",
+        "70"
+      ],
+      "out": "281"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$175",
+      "op": "XOR",
+      "args": [
+        "319",
+        "71"
+      ],
+      "out": "322"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$177",
+      "op": "XOR",
+      "args": [
+        "320",
+        "72"
+      ],
+      "out": "323"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$179",
+      "op": "XOR",
+      "args": [
+        "321",
+        "73"
+      ],
+      "out": "324"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$181",
+      "op": "XOR",
+      "args": [
+        "69",
+        "74"
+      ],
+      "out": "325"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$185",
+      "op": "XOR",
+      "args": [
+        "322",
+        "76"
+      ],
+      "out": "282"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$187",
+      "op": "XOR",
+      "args": [
+        "323",
+        "77"
+      ],
+      "out": "326"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$189",
+      "op": "XOR",
+      "args": [
+        "324",
+        "78"
+      ],
+      "out": "327"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$191",
+      "op": "XOR",
+      "args": [
+        "325",
+        "79"
+      ],
+      "out": "328"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$193",
+      "op": "XOR",
+      "args": [
+        "75",
+        "80"
+      ],
+      "out": "329"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$197",
+      "op": "XOR",
+      "args": [
+        "326",
+        "82"
+      ],
+      "out": "283"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$199",
+      "op": "XOR",
+      "args": [
+        "327",
+        "83"
+      ],
+      "out": "330"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$201",
+      "op": "XOR",
+      "args": [
+        "328",
+        "84"
+      ],
+      "out": "331"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$203",
+      "op": "XOR",
+      "args": [
+        "329",
+        "85"
+      ],
+      "out": "332"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$205",
+      "op": "XOR",
+      "args": [
+        "81",
+        "86"
+      ],
+      "out": "333"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$209",
+      "op": "XOR",
+      "args": [
+        "330",
+        "88"
+      ],
+      "out": "284"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$211",
+      "op": "XOR",
+      "args": [
+        "331",
+        "89"
+      ],
+      "out": "285"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$213",
+      "op": "XOR",
+      "args": [
+        "332",
+        "90"
+      ],
+      "out": "286"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$215",
+      "op": "XOR",
+      "args": [
+        "333",
+        "91"
+      ],
+      "out": "287"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$217",
+      "op": "XOR",
+      "args": [
+        "87",
+        "92"
+      ],
+      "out": "288"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$240",
+      "op": "XOR",
+      "args": [
+        "98",
+        "108"
+      ],
+      "out": "256"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$242",
+      "op": "XOR",
+      "args": [
+        "100",
+        "109"
+      ],
+      "out": "334"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$244",
+      "op": "XOR",
+      "args": [
+        "102",
+        "110"
+      ],
+      "out": "335"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$246",
+      "op": "XOR",
+      "args": [
+        "104",
+        "111"
+      ],
+      "out": "336"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$248",
+      "op": "XOR",
+      "args": [
+        "106",
+        "112"
+      ],
+      "out": "337"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$252",
+      "op": "XOR",
+      "args": [
+        "334",
+        "115"
+      ],
+      "out": "257"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$254",
+      "op": "XOR",
+      "args": [
+        "335",
+        "116"
+      ],
+      "out": "338"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$256",
+      "op": "XOR",
+      "args": [
+        "336",
+        "117"
+      ],
+      "out": "339"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$258",
+      "op": "XOR",
+      "args": [
+        "337",
+        "118"
+      ],
+      "out": "340"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$260",
+      "op": "XOR",
+      "args": [
+        "113",
+        "119"
+      ],
+      "out": "341"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$264",
+      "op": "XOR",
+      "args": [
+        "338",
+        "122"
+      ],
+      "out": "258"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$266",
+      "op": "XOR",
+      "args": [
+        "339",
+        "123"
+      ],
+      "out": "342"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$268",
+      "op": "XOR",
+      "args": [
+        "340",
+        "124"
+      ],
+      "out": "343"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$270",
+      "op": "XOR",
+      "args": [
+        "341",
+        "125"
+      ],
+      "out": "344"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$272",
+      "op": "XOR",
+      "args": [
+        "120",
+        "126"
+      ],
+      "out": "345"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$276",
+      "op": "XOR",
+      "args": [
+        "342",
+        "129"
+      ],
+      "out": "259"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$278",
+      "op": "XOR",
+      "args": [
+        "343",
+        "130"
+      ],
+      "out": "346"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$280",
+      "op": "XOR",
+      "args": [
+        "344",
+        "131"
+      ],
+      "out": "347"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$282",
+      "op": "XOR",
+      "args": [
+        "345",
+        "132"
+      ],
+      "out": "348"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$284",
+      "op": "XOR",
+      "args": [
+        "127",
+        "133"
+      ],
+      "out": "349"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$288",
+      "op": "XOR",
+      "args": [
+        "346",
+        "136"
+      ],
+      "out": "260"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$290",
+      "op": "XOR",
+      "args": [
+        "347",
+        "137"
+      ],
+      "out": "261"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$292",
+      "op": "XOR",
+      "args": [
+        "348",
+        "138"
+      ],
+      "out": "262"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$294",
+      "op": "XOR",
+      "args": [
+        "349",
+        "139"
+      ],
+      "out": "263"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$296",
+      "op": "XOR",
+      "args": [
+        "134",
+        "140"
+      ],
+      "out": "264"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$82",
+      "op": "XOR",
+      "args": [
+        "143",
+        "148"
+      ],
+      "out": "236"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$84",
+      "op": "XOR",
+      "args": [
+        "144",
+        "149"
+      ],
+      "out": "350"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$86",
+      "op": "XOR",
+      "args": [
+        "145",
+        "150"
+      ],
+      "out": "351"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$88",
+      "op": "XOR",
+      "args": [
+        "146",
+        "151"
+      ],
+      "out": "352"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$90",
+      "op": "XOR",
+      "args": [
+        "147",
+        "152"
+      ],
+      "out": "305"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$94",
+      "op": "XOR",
+      "args": [
+        "350",
+        "154"
+      ],
+      "out": "228"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$96",
+      "op": "XOR",
+      "args": [
+        "351",
+        "155"
+      ],
+      "out": "308"
+    },
+    {
+      "id": "$xor$gf212_mul_karatsuba.v:63$98",
+      "op": "XOR",
+      "args": [
+        "352",
+        "156"
+      ],
+      "out": "309"
+    }
+  ],
+  "and_count": 108,
+  "uncompute_plan": []
+}

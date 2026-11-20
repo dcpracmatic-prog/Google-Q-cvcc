@@ -52,3 +52,33 @@ El LLM ya no genera desde cero. `auto_mvp/portfolio_28_23.py` le da
 la base medida (ingeniería inversa del portfolio GM 28.23163) con
 los puntos a mejorar por tarea y lo ya medido que no funciona
 (Toom-3, limpieza exacta, J≠5). Ver `prompt_mejorar_portfolio(tarea)`.
+
+## Resultado medido — multiplicador GF(2^12) (2026-11-19)
+- Yosys 0.48+5 (OSS CAD Suite, precompilado) + ABC `-g AND` sobre
+  `verilog/gf212_mul.v` (schoolbook + reducción mod 0x1053):
+  **144 ANDs** (309 nodos en el IR, budget Q=892).
+- 144 es el conteo schoolbook (12x12 productos parciales). ABC no
+  lo baja: los 144 ANDs son independientes.
+- **No mejora**: el kernel Mastrovito actual del DQI cuesta 42
+  Toffolis por producto. 144 > 42. El Verilog ingenuo no le gana
+  a un kernel hecho a mano para este campo.
+- La vía para bajar de 42 es otra: escribir el Verilog con
+  estructura Mastrovito/Karatsuba (no schoolbook), o usar Yosys
+  para OTROS bloques (EEA, comparadores) donde no hay un kernel
+  hecho a mano. El pipeline (Verilog->Yosys->IR->C++->.kmx) ya
+  funciona de punta a punta; lo que falta es el bloque que sí
+  mejore.
+- Yosys vive en `~/workspace/sandbox-run/yosys/` (precompilado).
+
+## Resultado medido — multiplicador Karatsuba (creación desde 0, 2026-11-19)
+- `verilog/gf212_mul_karatsuba.v` (Karatsuba 6+6, 3 mults de 6 bits
+  + reducción mod 0x1053): verificado 500/500 contra gf212.py.
+- Yosys/ABC `-g AND`: **108 ANDs** (227 nodos en el IR, 108 CCX
+  en el .kmx emitido por C++). Pipeline completo funciona.
+- 108 = 3x36 (las 3 mults de 6 bits en schoolbook). Mejor que el
+  schoolbook 144, pero peor que el Mastrovito 42 del DQI.
+- Conclusión: la creación con Yosys sí produce un multiplicador
+  nuevo y correcto, pero la síntesis genérica no descubre la
+  estructura profunda (PolyMul(6)=17, Mastrovito 42) que ya trae
+  el kernel hecho a mano. Para bajar de 42 hace falta el circuito
+  optimizado específico, no solo otra estructura en Verilog.
