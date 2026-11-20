@@ -88,6 +88,8 @@ R_DQI = 1.1912605
 # v2.17.9: el scan usa siempre inversos directos (Montgomery
 # desactivado por fase), así que `batch` YA NO cambia Q/T/S: todos
 # los batch dan Q=1067, T=29481, S=3.9983e10 a n=10.
+# v2.17.16: T 29481 -> 33051, S 3.9983e10 -> 4.4825e10 (el arreglo
+# limpia hist_mult e is_zero de forma unitaria antes de liberarlos).
 _DEFAULT_BATCH = (1, 2, 3, 4, 8, 17, 36)
 _DEFAULT_NSLOT_EXTRA = (0, 2, 6)
 

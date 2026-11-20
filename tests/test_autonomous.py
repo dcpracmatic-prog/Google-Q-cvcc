@@ -161,11 +161,14 @@ def test_autonomous_genera_semillas(tmp_path):
     # Todas válidas (el generador del repo + verify_small).
     assert all(s["valid"] for s in res["semillas"])
     # Toom-3 DESACTIVADO (rompe bm_backward): la mejor es la nativa
-    # (T=29481, toom3=False); el knob toom3 ya no baja T.
+    # (T=33051, toom3=False); el knob toom3 ya no baja T.
     # v2.17.9: T 28587 -> 29481 (inversos directos, Montgomery
     # desactivado por fase; ver notes/v2.17.9.md).
+    # v2.17.16: T 29481 -> 33051 (el arreglo limpia hist_mult e
+    # is_zero de forma unitaria antes de liberarlos; ver el test
+    # de regresión test_full_circuit_phase_with_random_masks).
     assert res["mejor"]["toom3"] is False
-    assert res["mejor"]["toffoli_like"] == 29481
+    assert res["mejor"]["toffoli_like"] == 33051
     # La parametrización nueva se midió y se guardó.
     assert res["param_nueva"]["status"] == "medido"
     assert res["param_nueva"]["nslot"] == 7  # 10//2+2
