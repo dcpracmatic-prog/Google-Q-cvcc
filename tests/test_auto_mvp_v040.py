@@ -196,13 +196,22 @@ def test_pipeline_mode_drop_and_observer_neutral():
         calls["n"] += 1
         return {"official_pass": False, "S_measured": 1.0e10}
 
-    target = {"meta": meta_dqi(400, 90_000), "metrics": {"Q": 400, "T": 90_000,
-              "eps_plus": EPS}, "kind": "target", "name": "Q400"}
+    # H20 (trinquete del mejor): el proxy compara cada candidato contra
+    # el mejor encontrado en la corrida, no contra el mejor inicial.
+    # Por eso los 4 targets deben ser estrictamente mejores uno que
+    # otro (cada T >10% menor que el anterior, con el margen 0.10):
+    # 4 targets idénticos ya no promueven 4 veces (el 2º-4º empatan
+    # con el mejor y el proxy los rechaza por margen).
+    targets = [
+        {"meta": meta_dqi(400, t), "metrics": {"Q": 400, "T": t,
+         "eps_plus": EPS}, "kind": "target", "name": f"Q400-T{t}"}
+        for t in (90_000, 75_000, 60_000, 45_000)
+    ]
     with tempfile.TemporaryDirectory() as d:
         proxy = MetadataProxy(spec, hard_caps={"max_qubits": 2000}, margin=0.10)
         pipe = Pipeline(proxy, PromotionGate(30.0), runs_dir=Path(d) / "runs",
                         compile_fn=failing_compile)
-        res = pipe.run(iter([dict(target) for _ in range(4)]))
+        res = pipe.run(iter(targets))
         assert res.promoted == 4, res
         assert calls["n"] == 3, calls  # la 4a ya no compila (PROPOSE)
         assert res.mode == "propose", res.mode
@@ -217,7 +226,7 @@ def test_pipeline_mode_drop_and_observer_neutral():
                 yield {"meta": meta_dqi(1412, 1_304_706),
                        "metrics": {"Q": 1412, "T": 1_304_706, "eps_plus": EPS},
                        "kind": "candidate", "name": "MIS"}
-            yield dict(target)
+            yield dict(targets[0])
         p1 = Pipeline(MetadataProxy(spec, hard_caps={"max_qubits": 2000}, margin=0.10),
                       PromotionGate(30.0), runs_dir=Path(d) / "r1")
         r1 = p1.run(stream())

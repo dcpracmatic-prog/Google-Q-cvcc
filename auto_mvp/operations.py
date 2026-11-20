@@ -83,8 +83,14 @@ def apply_morph_tunnel(call_graph: dict[str, Any],
 
     Entrada: el grafo (dict de CallGraph) y, opcionalmente, reglas
     (si no se pasan, las del registro, con evidencia medida). Salida:
-    T/Q antes y después, movimientos y motivo de parada.
+    T/Q antes y después, movimientos y motivo de parada. Un método
+    desconocido se rechaza (ValueError): morph_tunnel cae a greedy
+    en silencio con cualquier otro valor, así que por aquí no pasa
+    un método inválido.
     """
+    if method not in ("greedy", "beam"):
+        raise ValueError(f"método de túnel desconocido: {method!r} "
+                         f"(greedy | beam)")
     from .morph_tunnel import ReplacementRule
     graph = CallGraph.from_dict(call_graph)
     use = RULES
@@ -128,7 +134,11 @@ def run_orchestrator(candidates: list[dict[str, Any]],
     temporal). Salida: el resultado del orquestador.
     """
     config = dict(config or {})
-    meta_mvp = float(config.get("meta_mvp", 30.0))
+    # H4: la meta (y el presupuesto) plegada de las directivas manda:
+    # load_plan ya pliega "meta 30" / "presupuesto 20 intentos".
+    plan_cfg = load_plan(config)
+    meta_mvp = float(plan_cfg["meta_mvp"]) \
+        if plan_cfg["meta_mvp"] is not None else 30.0
     task = "dqi"
     for c in candidates:
         m = c.get("meta") or {}
@@ -144,7 +154,6 @@ def run_orchestrator(candidates: list[dict[str, Any]],
             runs_dir=dest, time_budget_seconds=None)
         if best_S:
             pipe.best_S.update({str(k): float(v) for k, v in best_S.items()})
-        plan_cfg = load_plan(config)
         plan = StepPlan(steps=[dict(s) for s in plan_cfg["steps"]]) \
             if plan_cfg["steps"] else StepPlan()
         orch = AdaptiveOrchestrator(pipe, plan)
@@ -243,16 +252,30 @@ def validate_submission(path: str | Path,
     estados de los tres verificadores (para la puerta fail-closed
     completa). Salida: si el formato pasa, los motivos, y si se
     puede armar el ZIP (READY solo si la puerta Y el formato pasan).
+    Además de packaging.py, corre la auditoría de empaquetado
+    (vqcc/package_audit: estructura exacta, sin raíces extra,
+    angle_k consecutivos, claves del npz) y su resultado queda
+    registrado en "package_audit"; si la auditoría falla, el
+    submission no queda READY aunque packaging pase.
     """
     from .packaging import (submission_ready, validate_submission_dir,
                             validate_submission_zip)
+    from .vqcc.package_audit import audit_submission_dir, audit_zip
     p = Path(path)
     packaging = (validate_submission_dir(p) if p.is_dir()
                  else validate_submission_zip(p))
-    out = {"packaging": packaging}
+    audit = audit_submission_dir(p) if p.is_dir() else audit_zip(p)
+    out: dict[str, Any] = {"packaging": packaging, "package_audit": audit}
     if task_statuses is not None:
-        out["submission"] = submission_ready(task_statuses, packaging,
-                                             mode=mode)
+        sub = submission_ready(task_statuses, packaging, mode=mode)
+        if sub.get("status") == "READY" and not audit.get("ok"):
+            sub = {"status": "NOT_CREATED",
+                   "reasons": list(sub.get("reasons", []))
+                              + [f"auditoría de empaquetado: {e}"
+                                 for e in audit.get("errors", [])],
+                   "gate": sub.get("gate"), "packaging": packaging,
+                   "package_audit": audit}
+        out["submission"] = sub
     return out
 
 

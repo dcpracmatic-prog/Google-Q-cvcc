@@ -22,13 +22,34 @@ componentes v0.2.1 (que quedan intactos) con tres compuertas nuevas:
 5. CONVERGENCIA: la meta con regla de paro decide el final; el último
    récord CVV es MVP_CONVERGENCE con el mejor final.
 
-El motor morfogenético y el decodificador JSON SÍ están aquí
-(v0.6.0): su formalización algorítmica es Qualtran (Bloqs, grafo
-de llamadas, T/Q de primera clase), en qualtran_bridge.py,
-morph_tunnel.py, json_directive.py, step_plan.py y orchestrator.py.
-Lo que queda fuera: el tensor TERM_U con atractor y el
-entrenamiento algebraico implícito, que no tienen fórmula ni
-algoritmo definidos.
+El motor morfogenético (MORPH) y el decodificador JSON SÍ están
+cableados aquí (v2.17.15), sobre el orquestador y el pipeline:
+AutoMvp construye un Pipeline y un AdaptiveOrchestrator con sus
+propios componentes (proxy, verificador, spec) y cada candidato
+pasa por ellos antes de verificarse: el túnel MORPH corre sobre
+el grafo de llamadas del candidato (Pipeline.tunnel_candidate),
+la criba por proxy corre por Pipeline.proxy_eval y las directivas
+JSON en lenguaje natural se aplican con
+AdaptiveOrchestrator.apply_directive (run(directives=[...])).
+Si un candidato trae un Bloq real de Qualtran ("bloq"), su grafo
+se extrae con from_qualtran_bloq (qualtran_bridge.py) y es ese
+grafo real el que se tunela. Lo que queda fuera: el tensor
+TERM_U con atractor y el entrenamiento algebraico implícito,
+que no tienen fórmula ni algoritmo definidos.
+
+Lo que este lazo NO es: no es AdaptiveOrchestrator.run ni
+Pipeline.run. Esos dos son un motor de búsqueda hasta una meta
+ABSOLUTA (meta_mvp) que para en la primera promoción, y su paso
+"gate" necesita el S estimado del paso "proxy": cribar por proxy
+a los candidatos sin "meta" cambiaría el comportamiento medido
+(la regresión del paso 51, S=2.8906e12, no pasa el proxy con
+margen 0.10 tras MIS, tope 2.8773e12, y dejaría de contar como
+veto de integridad; y el verificador se llamaría 3 veces en vez
+de 8 en el test v030). Por eso el control del lazo (paciencia,
+detector, integridad, CVV y checkpoint) sigue en AutoMvp.run, y
+la puerta GM del pipeline no decide aceptaciones aquí: la
+aceptación la decide el verificador local + el detector, como
+antes.
 
 El lazo es el mismo que SearchLoop.run() con las tres compuertas
 (proxy, integridad, CVV+checkpoint). Se implementa aparte para no
@@ -38,6 +59,7 @@ pueden unificarse.
 from __future__ import annotations
 
 import math
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -52,8 +74,12 @@ from .cvv import CvvChain, CvvRecord
 from .vqcc.detect import CircuitDetector
 from .goal import Goal, GoalTracker
 from .integrity import IntegrityEvidence, IntegrityFilter, canonical_hash
+from .json_directive import Directive
 from .vqcc.ledger import VQCCLedger
-from .proxy import CandidateMeta, MetadataProxy
+from .orchestrator import AdaptiveOrchestrator
+from .pipeline import Pipeline
+from .proxy import MetadataProxy
+from .qualtran_bridge import from_qualtran_bloq
 from .vqcc.search import Mutator
 from .vqcc.verify import LocalVerifier
 
@@ -80,6 +106,15 @@ class MvpResult:
     cvv_path: str | None = None
     mode_transitions: list[dict[str, Any]] = field(default_factory=list)
     ledger_events: list[str] = field(default_factory=list)
+    # H19/H22 (v2.17.15): contadores del cableado al orquestador,
+    # al pipeline y al puente Qualtran.
+    tunneled: int = 0  # candidatos cuyo grafo MORPH mejoró (con movimientos)
+    tunnel_checked: int = 0  # candidatos con grafo que pasaron por el túnel
+    tunnel_errors: list[str] = field(default_factory=list)
+    qualtran_graphs: int = 0  # grafos extraídos de un Bloq real de Qualtran
+    bloq_errors: list[str] = field(default_factory=list)
+    reprogrammings: list[dict[str, Any]] = field(default_factory=list)
+    pipeline_runs_dir: str | None = None
 
 
 class AutoMvp:
@@ -135,6 +170,30 @@ class AutoMvp:
         self.proposed: dict[str, Any] | None = None
         self.detector.best_S = spec.baseline_S
         self._cycle = 0
+        # H19 (v2.17.15): el lazo corre SOBRE el pipeline y el
+        # orquestador, construidos con los componentes propios
+        # (proxy, verificador, spec). El pipeline necesita un
+        # runs_dir: con workdir va dentro; sin workdir, un temporal
+        # en disco (tempfile respeta TMPDIR). El orquestador, al
+        # construirse, conecta el motor MORPH al pipeline
+        # (tunnel_engine = RULES). Si no se configuró proxy, el
+        # pipeline lleva uno por defecto que nunca se usa: la criba
+        # solo corre cuando self.proxy existe (como antes).
+        if self.workdir is not None:
+            runs_dir = self.workdir / "pipeline_runs"
+        else:
+            runs_dir = Path(tempfile.mkdtemp(prefix="auto-mvp-pipeline-"))
+        pipe_proxy = self.proxy if self.proxy is not None \
+            else MetadataProxy(self.spec)
+        self.pipeline = Pipeline(pipe_proxy, runs_dir=runs_dir)
+        self.orchestrator = AdaptiveOrchestrator(self.pipeline)
+        self.pipeline_runs_dir = str(runs_dir)
+        # Contadores del cableado (van al MvpResult).
+        self.tunneled = 0
+        self.tunnel_checked = 0
+        self.tunnel_errors: list[str] = []
+        self.qualtran_graphs = 0
+        self.bloq_errors: list[str] = []
 
     # -- veto de salud (misma regla que SearchLoop v0.2.1) --
     def _drop_mode(self, reason: str, health: float | None) -> None:
@@ -172,7 +231,15 @@ class AutoMvp:
             return "n/a"
         return f"{(new - old) / old * 100:+.1f}%"
 
-    def run(self) -> MvpResult:
+    def run(self, directives: list[Directive | str] | None = None) -> MvpResult:
+        # H19: las directivas JSON (si las hay) reprograman el
+        # pipeline y el plan ANTES de ningún candidato. "prune"
+        # cambia el margen del proxy que criba este lazo (efecto
+        # real y medible); el resto queda registrado en
+        # orchestrator.reprogrammings (la meta y el plan del
+        # orquestador no gobiernan este lazo: ver docstring).
+        for d in (directives or []):
+            self.orchestrator.apply_directive(d)
         # 1. INGESTA: el baseline verificado queda sellado.
         self._cvv("INGEST_BASELINE", self.spec.baseline_S, "LOCKED_BASE",
                   logic_verified=True, certified=True,
@@ -195,12 +262,48 @@ class AutoMvp:
             }
             candidate = self.mutator.propose(self.spec, self.best, evidence)
             name = str(candidate.get("mutation", candidate.get("name", "?")))
+            # H22: si el candidato trae un Bloq REAL de Qualtran, su
+            # grafo se extrae del Bloq (no se construye a mano) y es
+            # ese grafo real el que se tunela. Solo se rellena cuando
+            # el candidato no trae ya un grafo (nunca se pisa el del
+            # mutador). Sin Qualtran no se inventa el grafo: el
+            # candidato sigue sin grafo y el lazo no se rompe.
+            if candidate.get("bloq") is not None \
+                    and "call_graph" not in candidate:
+                candidate = dict(candidate)
+                try:
+                    candidate["call_graph"] = from_qualtran_bloq(
+                        candidate["bloq"]).to_dict()
+                    self.qualtran_graphs += 1
+                except ImportError as e:
+                    self.bloq_errors.append(str(e))
+            # H19: el túnel MORPH corre sobre el grafo del candidato
+            # (Pipeline.tunnel_candidate, con las reglas del
+            # orquestador). Sin grafo no hay nada que tunelar. Si el
+            # túnel baja el T, el candidato que se verifica es el
+            # tunelado (métricas y grafo nuevos); si el grafo está
+            # roto, el lazo sigue con el candidato original y el
+            # fallo queda registrado (no se tira en silencio).
+            if candidate.get("call_graph") is not None:
+                self.tunnel_checked += 1
+                tunnel_res = None
+                try:
+                    candidate, tunnel_res = self.pipeline.tunnel_candidate(
+                        candidate)
+                except Exception as e:
+                    self.tunnel_errors.append(
+                        f"{name}: túnel MORPH falló: {e}")
+                if tunnel_res is not None and tunnel_res.moves:
+                    self.tunneled += 1
             # 2a. EVALUACIÓN (proxy): criba por metadatos antes de construir.
             if self.proxy is not None and "meta" in candidate:
-                meta = candidate["meta"]
-                if isinstance(meta, dict):
-                    meta = CandidateMeta(**meta)
-                verdict = self.proxy.evaluate(meta, self.best_S)
+                # H19: la criba corre por el Pipeline (proxy_eval),
+                # con el mejor S del MVP sincronizado en el pipeline
+                # (el pipeline guarda su propio best_S; sin
+                # sincronizar compararía contra el mejor envío, no
+                # contra best_S, y el veredicto cambiaría).
+                self.pipeline.best_S[self.spec.task] = self.best_S
+                verdict, _est_S = self.pipeline.proxy_eval(candidate)
                 if not verdict.ok:
                     self.proxy_rejected += 1
                     self.rejected += 1
@@ -373,4 +476,11 @@ class AutoMvp:
             cache_misses=self.cache.misses if self.cache else 0,
             cvv_path=cvv_path,
             mode_transitions=self.mode_transitions,
-            ledger_events=self.ledger.events())
+            ledger_events=self.ledger.events(),
+            tunneled=self.tunneled,
+            tunnel_checked=self.tunnel_checked,
+            tunnel_errors=list(self.tunnel_errors),
+            qualtran_graphs=self.qualtran_graphs,
+            bloq_errors=list(self.bloq_errors),
+            reprogrammings=list(self.orchestrator.reprogrammings),
+            pipeline_runs_dir=self.pipeline_runs_dir)

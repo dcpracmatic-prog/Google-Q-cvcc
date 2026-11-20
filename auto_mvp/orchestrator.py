@@ -19,19 +19,26 @@ Cómo funciona:
   reprogramación queda en el log.
 - La gobernanza vive en el Pipeline (modo AUTO->PROPOSE->SHADOW,
   Observer solo observa): el orquestador no veta nada, solo
-  reordena y adapta.
+  reordena y adapta. EXCEPCIÓN (H14): el paso verify SÍ veta —
+  si el verificador OFICIAL da FAIL sobre un artefacto real, el
+  candidato no se promueve ni se compila. Para que el veto bloquee
+  la compilación, verify debe ir ANTES de compile en el plan.
 
 Pasos implementados: tunnel, proxy, gate, compile, observe,
-calibrate (con sonda en los params del paso). Pasos reconocidos
-pero NO cableados (se reportan, no se saltan en silencio):
-- "search": la búsqueda de mutaciones vive en vqcc/search.py
-  (SearchLoop); no es un paso por candidato del orquestador.
-- "verify": la verificación oficial vive en la fase 3 (compile_fn
-  + verificador oficial); aquí se usa el verificador LOCAL
-  (LocalVerifier) sobre las métricas del candidato promovido.
+calibrate (con sonda en los params del paso o por directiva
+"sonda [...]"), search (SearchLoop real de vqcc/search.py) y
+verify (cribado local, u oficial con veto si hay artefacto real).
+
+Orden de los pasos (H17): gate exige que proxy haya corrido antes
+(S estimado presente) y compile exige promoción previa. Un plan
+que no cumple eso es un error de configuración: se lanza
+StepOrderError con el motivo, en vez de tirar el candidato en
+silencio.
 """
 from __future__ import annotations
 
+import inspect
+import json
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable, Iterable
@@ -40,14 +47,27 @@ from .json_directive import Directive, parse_directive
 from .morph_tunnel import RULES
 from .pipeline import Pipeline
 from .step_plan import StepPlan
-from .vqcc.verify import LocalVerifier
+from .vqcc.verify import (LocalVerifier, verify_chemistry_factorization,
+                          verify_circuit_file)
 
 IMPLEMENTED_STEPS = ("tunnel", "proxy", "gate", "compile", "observe",
-                     "calibrate", "verify")
-NOT_WIRED = {
-    "search": ("la búsqueda de mutaciones vive en vqcc/search.py "
-               "(SearchLoop); no es un paso por candidato"),
-}
+                     "calibrate", "search", "verify")
+# H15: "search" ya está cableado (SearchLoop real); el dict queda
+# para pasos futuros reconocidos pero no cableados.
+NOT_WIRED: dict[str, str] = {}
+
+# Claves de candidato que señalan un artefacto real de circuito
+# (archivo .kmb/.kmx) para la verificación oficial del paso verify.
+_CIRCUIT_PATH_KEYS = ("circuit_path", "circuit_file", "kmb_path", "kmx_path")
+
+
+class StepOrderError(ValueError):
+    """El plan pide un paso antes de su requisito (H17).
+
+    Ej. gate sin proxy antes, o compile sin promoción previa.
+    Es un error de configuración del plan, no un rechazo del
+    candidato: se lanza en vez de descartar el candidato en silencio.
+    """
 
 
 @dataclass
@@ -70,16 +90,47 @@ class OrchestratorResult:
     dataset_dir: str = ""
 
 
+class _IdentityMutator:
+    """Mutador mínimo para el paso search sin mutador explícito (H15).
+
+    Propone el candidato actual tal cual en cada intento: el
+    SearchLoop lo verifica (cribado local), lo acepta si baja el
+    mejor S del spec y se estanca si no mejora. Es búsqueda de
+    verdad (el lazo corre y decide), no un hueco: con un mutador
+    real (params del paso "mutator" o search_mutator del
+    constructor) el lazo propone mutaciones nuevas.
+    """
+
+    def __init__(self, candidate: dict[str, Any]):
+        self._candidate = candidate
+
+    def propose(self, spec, best, evidence) -> dict[str, Any]:
+        return dict(self._candidate)
+
+
 class AdaptiveOrchestrator:
     """Orquestador adaptativo sobre un Pipeline + un StepPlan."""
 
     def __init__(self, pipe: Pipeline, plan: StepPlan | None = None,
-                 tunnel_rules: list | None = None):
+                 tunnel_rules: list | None = None,
+                 search_mutator: Any | None = None):
         self.pipe = pipe
         self.plan = plan or StepPlan()
         self.tunnel_rules = list(RULES if tunnel_rules is None else tunnel_rules)
-        self.pipe.tunnel_engine = self.tunnel_rules
+        # H23: respeta un motor de túnel ya configurado en el Pipeline;
+        # solo se pone el propio si el Pipeline no trae ninguno.
+        if pipe.tunnel_engine is None:
+            self.pipe.tunnel_engine = self.tunnel_rules
         self.attack_block: str | None = None
+        # H1: la directiva tunnel guarda también la regla, no solo el bloque.
+        self.attack_rule: str | None = None
+        # H16: sonda para calibrate, puesta por directiva ("sonda [...]").
+        self.probe: list[dict[str, Any]] | None = None
+        # H2: el presupuesto pendiente vive aquí desde el inicio; run()
+        # ya no lo borra (una directiva antes de run() debe sobrevivir).
+        self._pending_budget: dict[str, Any] = {}
+        # H15: mutador para el paso search (si es None, mutador identidad).
+        self.search_mutator = search_mutator
         self.reprogrammings: list[dict[str, Any]] = []
         self.step_log: list[dict[str, Any]] = []
 
@@ -89,17 +140,62 @@ class AdaptiveOrchestrator:
             {"action": action, "detail": detail, "directive": directive,
              "ts": time.time(), "order_after": list(self.plan.order)})
 
+    def _set_probe(self, probe: Any, raw: str) -> bool:
+        """Guarda la sonda para calibrate (H16). Acepta un candidato
+        dict o una lista de candidatos dict."""
+        if isinstance(probe, dict):
+            probe = [probe]
+        if (not isinstance(probe, list) or not probe
+                or not all(isinstance(c, dict) for c in probe)):
+            self._record("sonda_no_aplica", {
+                "reason": "la sonda debe ser una lista de candidatos "
+                          "(dicts con metrics), no " + type(probe).__name__},
+                raw)
+            return False
+        self.probe = list(probe)
+        self._record("set_probe", {
+            "n": len(self.probe),
+            "names": [c.get("name", c.get("mutation", "?"))
+                      for c in self.probe]}, raw)
+        return True
+
     def apply_directive(self, directive: Directive | str) -> bool:
         """Aplica una directiva (decodificada o en texto) al plan o a la meta."""
-        d = parse_directive(directive) if isinstance(directive, str) else directive
+        # H16: "sonda [...]" no está en el vocabulario de
+        # json_directive (no se toca ese archivo): se intercepta aquí.
+        # Forma: sonda [{"name": ..., "task": "dqi", "metrics": {...}}, ...]
+        if isinstance(directive, str):
+            raw = directive.strip()
+            if raw.lower().startswith("sonda"):
+                rest = raw[5:].strip()
+                if not rest:
+                    self._record("sonda_no_aplica", {
+                        "reason": "sonda sin lista: usa "
+                                  "'sonda [{...candidato...}, ...]'"}, raw)
+                    return False
+                try:
+                    probe = json.loads(rest)
+                except ValueError as e:
+                    self._record("sonda_no_aplica", {
+                        "reason": f"la lista de la sonda no es JSON válido: {e}"},
+                        raw)
+                    return False
+                return self._set_probe(probe, raw)
+            d = parse_directive(directive)
+        else:
+            d = directive
         if not d.parsed:
             self._record("unparsed", {"reason": d.reason}, d.raw)
             return False
         v, p = d.verb, d.params
+        if v in ("sonda", "set_probe"):
+            return self._set_probe(p.get("probe", p.get("candidates")), d.raw)
         if v == "set_meta_mvp":
             old = self.pipe.gate.meta_mvp
             self.pipe.gate.meta_mvp = float(p["meta_mvp"])
             self.pipe.gate.threshold = self.pipe.gate.meta_mvp
+            # H24: pipe.meta_mvp también (pipeline.py:304 lo lee de la puerta).
+            self.pipe.meta_mvp = float(p["meta_mvp"])
             self._record("set_meta_mvp", {"from": old, "to": p["meta_mvp"]}, d.raw)
             return True
         if v == "set_budget":
@@ -110,11 +206,23 @@ class AdaptiveOrchestrator:
         if v == "prune":
             old = self.pipe.proxy.margin
             self.pipe.proxy.margin = float(p.get("pct", 0.0)) / 100.0
-            self._record("prune", {"from": old, "to": self.pipe.proxy.margin,
-                                   "metric": p.get("metric", "T")}, d.raw)
+            metric = p.get("metric", "T")
+            # H25: el margen que se toca es GENÉRICO: MetadataProxy
+            # solo tiene un margen (proxy.margin), no hay margen por
+            # métrica. El % se aplica al S estimado completo, no solo
+            # a la métrica nombrada; queda registrado así, no en silencio.
+            self._record("prune", {
+                "from": old, "to": self.pipe.proxy.margin,
+                "metric": metric, "scope": "generic",
+                "note": ("MetadataProxy solo tiene un margen "
+                         "(proxy.margin): no hay margen por métrica, así "
+                         "que el % se aplica al S estimado completo, no "
+                         f"solo a {metric}")}, d.raw)
             return True
         if v == "tunnel":
             self.attack_block = p["block"]
+            # H1: guarda también la regla (p.get, puede no venir).
+            self.attack_rule = p.get("rule")
             self._record("attack_block", p, d.raw)
             return True
         # El resto son operaciones sobre el plan.
@@ -131,7 +239,9 @@ class AdaptiveOrchestrator:
             directives_at: dict[int, list[Directive | str]] | None = None
             ) -> OrchestratorResult:
         started = time.monotonic()
-        self._pending_budget: dict[str, Any] = {}
+        # H2: NO se borra self._pending_budget aquí: un presupuesto
+        # aplicado antes de run() (apply_directive) debe sobrevivir
+        # y aplicarse en esta corrida.
         for d in (directives or []):
             self.apply_directive(d)
         directives_at = directives_at or {}
@@ -199,6 +309,72 @@ class AdaptiveOrchestrator:
             exported=ctx["exported"],
             dataset_dir=str(pipe.dataset.root))
 
+    def _official_artifact(self, candidate: dict[str, Any],
+                           ) -> tuple[str, Any] | None:
+        """Artefacto real del candidato para verificación oficial (H14).
+
+        Devuelve ("factorization", ruta) si trae factorization_path
+        (química) o ("circuit", ruta) si trae ruta de circuito
+        (.kmb/.kmx). Si no trae artefacto, None (cribado local).
+        """
+        if candidate.get("factorization_path"):
+            return ("factorization", candidate["factorization_path"])
+        for key in _CIRCUIT_PATH_KEYS:
+            if candidate.get(key):
+                return ("circuit", candidate[key])
+        return None
+
+    def _run_search(self, candidate: dict[str, Any],
+                    step: dict[str, Any], trace: dict[str, Any],
+                    ) -> dict[str, Any]:
+        """Paso search: corre el SearchLoop real (H15).
+
+        Mutador: params del paso ("mutator"), o search_mutator del
+        constructor, o el mutador identidad (propone el candidato
+        actual). Devuelve el candidato a usar en los pasos siguientes
+        (el mejor de la búsqueda, si lo hay; si no, el mismo).
+        Si la búsqueda falla, queda en el trace y el flujo sigue:
+        un fallo de búsqueda no es un rechazo del candidato.
+        """
+        from .vqcc.search import SearchLoop
+        params = step.get("params", {}) or {}
+        mutator = params.get("mutator") or self.search_mutator
+        if mutator is None:
+            mutator = _IdentityMutator(candidate)
+            trace["mutator"] = "identity: propone el candidato actual"
+        else:
+            trace["mutator"] = type(mutator).__name__
+        max_trials = params.get("max_trials", params.get("trials", 5))
+        stagnation = params.get("stagnation_limit")
+        try:
+            loop = SearchLoop(
+                spec=self.pipe.proxy.spec, mutator=mutator,
+                verifier=LocalVerifier(self.pipe.proxy.spec),
+                max_trials=int(max_trials),
+                stagnation_limit=(int(stagnation)
+                                  if stagnation is not None else None))
+            result = loop.run()
+        except Exception as e:  # la búsqueda no debe matar la corrida
+            trace["ok"] = False
+            trace["reason"] = f"search falló: {e}"
+            return candidate
+        trace["ok"] = True
+        trace["trials"] = result.trials
+        trace["accepted"] = result.accepted
+        trace["rejected"] = result.rejected
+        trace["best_S"] = result.best_S
+        trace["stagnated"] = result.stagnated
+        if result.best is not None:
+            trace["found"] = result.best.get(
+                "name", result.best.get("mutation", "?"))
+            # El mejor de la búsqueda NO sube aquí pipe.best_S ni
+            # gate.current: eso solo pasa al promover (H20). Si se
+            # subiera ya, el propio candidato encontrado fallaría su
+            # proxy (su S es igual al mejor nuevo y el margen exige
+            # batirlo); el listón lo sube la puerta al promoverlo.
+            return result.best
+        return candidate
+
     def _process_candidate(self, candidate: dict[str, Any],
                            ctx: dict[str, Any]) -> None:
         pipe = self.pipe
@@ -217,7 +393,26 @@ class AdaptiveOrchestrator:
             trace = {"iteration": pipe.iteration, "step": name,
                      "method": method}
             if name == "tunnel":
-                candidate, res = pipe.tunnel_candidate(candidate, method=method or "greedy")
+                # H7: pasa block y rule al túnel (si el Pipeline los
+                # acepta; si no, se registra que el filtro no se aplicó).
+                tunnel_kwargs: dict[str, Any] = {}
+                try:
+                    sig_params = inspect.signature(
+                        pipe.tunnel_candidate).parameters
+                except (TypeError, ValueError):
+                    sig_params = {}
+                if "block" in sig_params and "rule" in sig_params:
+                    tunnel_kwargs = {"block": self.attack_block,
+                                     "rule": self.attack_rule}
+                    trace["tunnel_filter"] = {"block": self.attack_block,
+                                              "rule": self.attack_rule}
+                elif (self.attack_block is not None
+                        or self.attack_rule is not None):
+                    trace["tunnel_filter"] = (
+                        "sin aplicar: el Pipeline no acepta block/rule "
+                        "todavía (pendiente en pipeline.py)")
+                candidate, res = pipe.tunnel_candidate(
+                    candidate, method=method or "greedy", **tunnel_kwargs)
                 if res is not None and res.moves:
                     ctx["tunneled"] += 1
                     trial["tunnel"] = res.as_dict()
@@ -233,10 +428,14 @@ class AdaptiveOrchestrator:
                 trial["passed"] = True
             elif name == "gate":
                 if est_S is None:
+                    # H17: gate sin proxy antes es error de plan, no
+                    # rechazo del candidato: se lanza con el motivo.
                     trace["ok"] = False
-                    trace["reason"] = "gate sin S estimado (proxy no corrió antes)"
+                    trace["reason"] = ("gate sin S estimado: proxy no "
+                                       "corrió antes; reordena el plan "
+                                       "(proxy antes que gate)")
                     self.step_log.append(trace)
-                    return
+                    raise StepOrderError(trace["reason"])
                 cand_S = {self._task_of(candidate): est_S}
                 gate_v = pipe.gate.evaluate(cand_S)
                 trace["gm"] = gate_v.gm
@@ -262,15 +461,32 @@ class AdaptiveOrchestrator:
                     self.step_log.append(trace)
                     return
                 promoted = True
+                # H20: el listón sube con el candidato promovido: el
+                # mejor por tarea (pipe.best_S, contra el que compara
+                # el proxy) y el "current" de la puerta (contra el que
+                # calcula la GM) pasan a ser este S, no el inicial.
+                # Solo al promover: un candidato no promovido no cierra
+                # la puerta a repetir el mismo diseño tras bajar la meta.
+                task = self._task_of(candidate)
+                prev_best = pipe.best_S.get(task)
+                if est_S is not None and (prev_best is None
+                                          or est_S < prev_best):
+                    pipe.best_S[task] = est_S
+                    pipe.gate.current[task] = est_S
+                    trace["best_S_updated"] = {task: est_S}
             elif name == "compile":
                 if not promoted or gate_v is None:
+                    # H17: compile sin promoción es error de plan.
                     trace["ok"] = False
-                    trace["reason"] = "compile sin promoción (gate no promovió antes)"
+                    trace["reason"] = ("compile sin promoción: gate no "
+                                       "promovió antes; reordena el plan "
+                                       "(gate antes que compile)")
                     self.step_log.append(trace)
-                    return
+                    raise StepOrderError(trace["reason"])
                 meta = candidate.get("meta")
                 task = self._task_of(candidate)
-                record = {"iteration": pipe.iteration, "gm": gate_v.gm,
+                record = {"name": candidate.get("name"),
+                          "iteration": pipe.iteration, "gm": gate_v.gm,
                           "S": {task: est_S}, "ratios": gate_v.ratios,
                           "task": task, "kind": kind, "meta": meta,
                           "metrics": candidate.get("metrics", {}),
@@ -293,30 +509,72 @@ class AdaptiveOrchestrator:
             elif name == "observe":
                 pipe._observe()
             elif name == "calibrate":
-                probe = step.get("params", {}).get("probe")
+                # H16: la sonda puede venir en los params del paso o
+                # por directiva ("sonda [...]"); el paso manda si trae una.
+                step_probe = step.get("params", {}).get("probe")
+                probe = step_probe or self.probe
                 if probe is None:
                     trace["ok"] = False
-                    trace["reason"] = "calibrate sin sonda en los params del paso"
+                    trace["reason"] = ("calibrate sin sonda: ni en los "
+                                       "params del paso ni por directiva "
+                                       "'sonda [...]'")
                 else:
-                    from .vqcc.calibrate import calibrate_from_candidates
-                    cal = calibrate_from_candidates(
-                        pipe.proxy.spec, probe,
-                        LocalVerifier(pipe.proxy.spec))
-                    pipe.proxy.margin = cal.margin
-                    pipe.calibration = cal
-                    trace["margin"] = cal.margin
+                    trace["probe_source"] = ("step" if step_probe
+                                             else "directive")
+                    try:
+                        from .vqcc.calibrate import calibrate_from_candidates
+                        cal = calibrate_from_candidates(
+                            pipe.proxy.spec, probe,
+                            LocalVerifier(pipe.proxy.spec))
+                    except ValueError as e:
+                        trace["ok"] = False
+                        trace["reason"] = f"sonda inválida: {e}"
+                    else:
+                        pipe.proxy.margin = cal.margin
+                        pipe.calibration = cal
+                        trace["ok"] = True
+                        trace["margin"] = cal.margin
+            elif name == "search":
+                # H15: SearchLoop real (ver _run_search).
+                candidate = self._run_search(candidate, step, trace)
             elif name == "verify":
                 if not promoted:
                     trace["ok"] = False
                     trace["reason"] = "verify sin promoción previa"
                 else:
-                    v = LocalVerifier(pipe.proxy.spec)
-                    res = v.verify({"task": self._task_of(candidate),
-                                    "metrics": candidate.get("metrics", {}),
-                                    "S": est_S})
-                    trace["ok"] = bool(res.ok)
-                    trace["verified_by"] = res.verified_by
-                    trace["failures"] = list(res.failures)
+                    task = self._task_of(candidate)
+                    artifact = self._official_artifact(candidate)
+                    if artifact is not None:
+                        # H14: artefacto real -> verificador OFICIAL,
+                        # con veto: FAIL = no se promueve ni se compila.
+                        kind, path = artifact
+                        if kind == "factorization":
+                            res = verify_chemistry_factorization(
+                                path,
+                                system=candidate.get("system",
+                                                     "FeMoCo76o113e"))
+                        else:
+                            res = verify_circuit_file(path, task)
+                        trace["ok"] = bool(res.ok)
+                        trace["verified_by"] = res.verified_by
+                        trace["failures"] = list(res.failures)
+                        trace["official"] = True
+                        if not res.ok:
+                            trace["veto"] = True
+                            trace["reason"] = (
+                                "verificador oficial FAIL: el candidato "
+                                "no se promueve ni se compila")
+                            trial["official_veto"] = True
+                            self.step_log.append(trace)
+                            return
+                    else:
+                        v = LocalVerifier(pipe.proxy.spec)
+                        res = v.verify({"task": task,
+                                        "metrics": candidate.get("metrics", {}),
+                                        "S": est_S})
+                        trace["ok"] = bool(res.ok)
+                        trace["verified_by"] = res.verified_by
+                        trace["failures"] = list(res.failures)
             elif name in NOT_WIRED:
                 trace["ok"] = False
                 trace["reason"] = NOT_WIRED[name]

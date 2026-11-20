@@ -117,7 +117,12 @@ def test_tunnel_toom4_measured():
     assert abs(s - 1.923348e13) / 1.923348e13 < 1e-3
 
 
-def test_tunnel_reorder_unlocks_rule():
+def test_tunnel_regla_con_orden_no_cumplido_no_se_aplica():
+    # H9: el motor ya NO reordena para desbloquear una regla con
+    # precondición de orden (no verifica conmutación en ningún
+    # sitio). La regla con el orden incumplido simplemente no aplica:
+    # no hay movimientos, el T no cambia y el orden de los hijos no
+    # se toca.
     root = Block(name="r", kind="r", t_count=None, children=[
         (Block(name="C", kind="C", t_count=50), 1),
         (Block(name="A", kind="A", t_count=100), 1),
@@ -126,12 +131,19 @@ def test_tunnel_reorder_unlocks_rule():
         name="b-mejora", target="B", replacement="B2", delta_T=-80.0,
         evidence="sintético con evidencia", requires_order=("A", "C"))
     res = tunnel(CallGraph(root=root, source="manual"), [rule])
-    assert res.baseline_T == 350.0 and res.final_T == 270.0
-    assert res.moves[0].kind == "reorder"  # reordena A antes que C
-    assert res.moves[1].rule == "b-mejora"
-    # Reordenar solo no cambia el costo.
+    assert res.baseline_T == 350.0 and res.final_T == 350.0
+    assert res.moves == []
+    assert [m.kind for m in res.moves] == []
     order = [c.name for c, _ in res.graph.root.children]
-    assert order.index("A") < order.index("C")
+    assert order == ["C", "A", "B"]  # el orden no se tocó
+    # Y con el orden ya cumplido la misma regla sí aplica.
+    root2 = Block(name="r", kind="r", t_count=None, children=[
+        (Block(name="A", kind="A", t_count=100), 1),
+        (Block(name="C", kind="C", t_count=50), 1),
+        (Block(name="B", kind="B", t_count=200), 1)])
+    res2 = tunnel(CallGraph(root=root2, source="manual"), [rule])
+    assert res2.final_T == 270.0
+    assert [m.rule for m in res2.moves] == ["b-mejora"]
 
 
 def test_tunnel_rule_needs_evidence():

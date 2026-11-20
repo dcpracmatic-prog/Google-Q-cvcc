@@ -18,6 +18,16 @@ Este módulo es el puente:
   Qualtran instalado, el puente trabaja con grafos construidos a
   mano (los del cost_model) y ``from_qualtran_bloq`` dice que falta
   la librería, no inventa el grafo.
+- Uso en producción (v2.17.15): ``AutoMvp.run`` (mvp.py) extrae el
+  grafo con ``from_qualtran_bloq`` cuando un candidato trae un Bloq
+  real de Qualtran (clave "bloq"): ese grafo real
+  (source="qualtran") es el que se tunela con MORPH y se verifica.
+  Hoy ningún mutador emite candidatos con Bloq; el camino existe
+  para candidatos-módulo que traigan su Bloq, y se prueba con
+  Bloqs reales (Toffoli, Add(QUInt(4))). Los grafos semilla de las
+  tres tareas (DQI, invsqrt, química) SIGUEN construidos a mano
+  desde el cost_model: esos circuitos son kickmix, no Bloqs de
+  Qualtran, así que no hay Bloq real del que extraerlos.
 
 Límites que Qualtran NO cubre (dicho con el dato, no recortado):
 - Qualtran NO demuestra que dos Bloqs sean funcionalmente iguales.

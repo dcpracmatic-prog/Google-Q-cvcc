@@ -7,7 +7,12 @@ medidos y su procedencia.
 - dqi: el circuito BM+Forney como grafo de llamadas (cost_model exacto,
   el mismo de los tests v060/v110): T=1,511,522, Q=1,414, eps+=0.001188.
   La regla chien-montgomery-b17 aplica y da el número medido
-  (T=1,315,731, S=3.2331e12).
+  (T=1,315,731, S=3.2331e12). El grafo trae también un bloque
+  "multiplier" (los multiplicadores GF del decodificador: el modelo
+  de costos entero está parametrizado por el multiplicador, y omega
+  usa multiplicadores por paso): así la regla multiplier-toom4
+  puede aplicar. El bloque no trae T propio medido (como sus
+  hermanos: el T de la raíz es la autoridad).
 - invsqrt: el invsqrt v1 certificado (verificador oficial PASS,
   S=100,568.5). No hay reglas MORPH medidas para invsqrt: el grafo
   semilla es solo la raíz con sus métricas, el mutador no propone
@@ -64,13 +69,21 @@ CHEM_PROVENANCE = (
 
 
 def _dqi_seed_graph() -> CallGraph:
-    """El circuito BM+Forney como grafo de llamadas (cost_model exacto)."""
+    """El circuito BM+Forney como grafo de llamadas (cost_model exacto).
+
+    El bloque "multiplier" son los multiplicadores GF del
+    decodificador (dqi_cost.py parametriza todo el decodificador por
+    el multiplicador; omega usa multiplicadores por paso): sin él la
+    regla multiplier-toom4 estaba muerta en este grafo. No trae T
+    propio medido, como sus hermanos: el T total es el de la raíz.
+    """
     root = Block(name="dqi-bm-forney", kind="dqi", t_count=1_511_522,
                  qubits=1_414, children=[
                      (Block(name="bm_forward", kind="bm_forward"), 1),
                      (Block(name="omega", kind="omega"), 1),
                      (Block(name="chien", kind="chien"), 1),
-                     (Block(name="bm_backward", kind="bm_backward"), 1)])
+                     (Block(name="bm_backward", kind="bm_backward"), 1),
+                     (Block(name="multiplier", kind="multiplier"), 1)])
     return CallGraph(root=root, source="cost_model")
 
 

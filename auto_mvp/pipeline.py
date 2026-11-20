@@ -231,6 +231,7 @@ class PipelineResult:
     best_gm_by_side: dict[str, float] = field(default_factory=dict)
     goal_reached: bool = False
     meta_mvp: float = 0.0
+    tunneled: int = 0  # v2.17.15 (H13): candidatos tunelados en run()
     # v0.8.0: módulos exportados al dataset de trabajo.
     exported: int = 0
     dataset_dir: str = ""
@@ -369,16 +370,35 @@ class Pipeline:
         self.max_consecutive_compile_failures = max_consecutive_compile_failures
 
     def tunnel_candidate(self, candidate: dict[str, Any],
-                         method: str = "greedy") -> tuple[dict[str, Any], Any | None]:
+                         method: str = "greedy",
+                         block: str | None = None,
+                         rule: str | None = None) -> tuple[dict[str, Any], Any | None]:
         """Paso "tunnel": tunela el candidato si trae un grafo de llamadas.
 
         El candidato trae su grafo en ``candidate["call_graph"]``
         (un CallGraph o su dict). Si el motor no está configurado o
         el candidato no trae grafo, devuelve el candidato tal cual y
-        None. Si el túnel baja el T, actualiza las métricas del
-        candidato (Q, T) con el costo tunelado y devuelve el
-        resultado del túnel.
+        None.
+        ``block`` filtra las reglas por bloque atacado (solo las
+        reglas cuyo ``target`` es ese bloque); ``rule`` filtra por
+        nombre de regla. Sin ``block`` ni ``rule`` se aplican todas
+        las reglas, como antes. El orquestador pasa aquí su
+        ``attack_block`` y su ``attack_rule``.
+        El túnel lleva el gancho de integridad (``verify``): un
+        grafo tunelado que no pase el filtro se descarta. El filtro
+        es el que ya existe en el repo (``integrity.IntegrityFilter``
+        sobre la evidencia del candidato, si la trae) más la
+        estructura del grafo (T/Q finitos y presentes). Sin
+        evidencia, solo se exige la estructura: un candidato
+        proyección sin evidencia no se bloquea por no traerla.
+        Si el túnel baja el T, actualiza las métricas del candidato
+        con el costo tunelado — no solo Q y T, también las
+        específicas de cada tarea, para que estimate_S vea la
+        mejora: invsqrt ``toffoli``/``t_count`` (y ``C`` derivada),
+        química ``Ttot``/``Qtot``. ``lambda_eff`` no cambia: el
+        túnel no reentrena la factorización.
         """
+        from .integrity import IntegrityFilter
         from .morph_tunnel import tunnel as morph_tunnel
         from .qualtran_bridge import CallGraph
         if self.tunnel_engine is None:
@@ -389,22 +409,54 @@ class Pipeline:
         graph = raw if isinstance(raw, CallGraph) else CallGraph.from_dict(raw)
         rules = self.tunnel_engine if isinstance(self.tunnel_engine, list) \
             else getattr(self.tunnel_engine, "rules", None) or []
-        res = morph_tunnel(graph, rules, method=method)
+        if block is not None:
+            rules = [r for r in rules if r.target == block]
+        if rule is not None:
+            rules = [r for r in rules if r.name == rule]
+        integrity = IntegrityFilter()
+
+        def _verify(tunneled: Any) -> bool:
+            t = tunneled.total_T()
+            q = tunneled.total_Q()
+            if t is None or q is None or not math.isfinite(t) or q < 0:
+                return False
+            evidence = candidate.get("integrity")
+            if evidence is not None:
+                ok, _reasons = integrity.check(evidence)
+                return ok
+            return True
+
+        res = morph_tunnel(graph, rules, method=method, verify=_verify)
         if res.final_T is None or res.baseline_T is None \
                 or res.final_T >= res.baseline_T or not res.moves:
             return candidate, res
         new = dict(candidate)
         meta = candidate.get("meta")
         metrics = dict(candidate.get("metrics", {}))
+        delta_T = res.final_T - res.baseline_T  # negativo: la mejora
+        updates: dict[str, Any] = {}
         if res.final_Q is not None:
-            metrics["Q"] = res.final_Q
-        metrics["T"] = res.final_T
+            updates["Q"] = res.final_Q
+        updates["T"] = res.final_T
+        task = (meta.get("task") if isinstance(meta, dict)
+                else getattr(meta, "task", None) or candidate.get("task"))
+        if task == "invsqrt":
+            for key in ("toffoli", "t_count"):
+                if key in metrics:
+                    updates[key] = max(0.0, float(metrics[key]) + delta_T)
+            if "C" in metrics and "toffoli" in updates and "t_count" in updates:
+                updates["C"] = updates["toffoli"] + updates["t_count"] / 4.0
+        elif task == "dfthcsos":
+            if "Ttot" in metrics:
+                updates["Ttot"] = max(0.0, float(metrics["Ttot"]) + delta_T)
+            if "Qtot" in metrics and res.final_Q is not None:
+                updates["Qtot"] = res.final_Q
+        # lambda_eff no se toca: el túnel no reentrena la factorización.
+        metrics.update(updates)
         if isinstance(meta, dict):
             new_meta = dict(meta)
             new_meta["metrics"] = dict(new_meta.get("metrics", {}))
-            if res.final_Q is not None:
-                new_meta["metrics"]["Q"] = res.final_Q
-            new_meta["metrics"]["T"] = res.final_T
+            new_meta["metrics"].update(updates)
             new["meta"] = new_meta
         elif meta is not None:
             from .proxy import CandidateMeta
@@ -421,6 +473,18 @@ class Pipeline:
         # tuneladas, la estructura y el S no coincidirían.
         new["call_graph"] = res.graph.to_dict()
         return new, res
+
+    def _update_best(self, task: str, est_S: float) -> None:
+        """Trinquete (H20): el mejor visto sube el listón en caliente.
+
+        Cuando un candidato mejora el GM, su S pasa a ser el mejor
+        de su tarea en ``best_S`` (lo que lee el proxy) y en
+        ``gate.current`` (lo que lee la puerta), para que los
+        candidatos siguientes se comparen contra el mejor
+        encontrado en ESTA corrida, no contra el mejor inicial.
+        """
+        self.best_S[task] = float(est_S)
+        self.gate.current[task] = float(est_S)
 
     def proxy_eval(self, candidate: dict[str, Any]) -> tuple[Any, float | None]:
         """Fase 1 (extraída para el orquestador): proxy + S estimado."""
@@ -555,6 +619,7 @@ class Pipeline:
             max_iterations: int | None = None) -> PipelineResult:
         started = time.monotonic()
         screened = proxy_rejected = gate_rejected = promoted = 0
+        tunneled = 0  # H13: candidatos tunelados por el paso túnel
         shadow_skipped = 0
         exported = 0  # v0.8.0: módulos exportados al dataset en esta corrida
         best_gm = float(self.state.get("best_gm", 0.0))
@@ -591,6 +656,16 @@ class Pipeline:
             self.iteration += 1
             run_count += 1
             screened += 1
+            # Paso túnel (H13): si hay motor, tunela ANTES del proxy
+            # (y antes de extraer meta: el proxy y la puerta deben
+            # ver las métricas tuneladas). Sin motor el paso no
+            # existe (desactivado). Queda en el trial
+            # (trial["tunnel"]) y en el contador tunneled.
+            tunnel_res = None
+            if self.tunnel_engine is not None:
+                candidate, tunnel_res = self.tunnel_candidate(candidate)
+                if tunnel_res is not None and tunnel_res.moves:
+                    tunneled += 1
             meta = candidate.get("meta")
             if isinstance(meta, dict):
                 meta = CandidateMeta(**meta)
@@ -599,6 +674,8 @@ class Pipeline:
             trial: dict[str, Any] = {"S": None, "passed": False,
                                      "accepted": False, "integrity_veto": False,
                                      "kind": kind, "compile_failed": False}
+            if tunnel_res is not None and tunnel_res.moves:
+                trial["tunnel"] = tunnel_res.as_dict()
             self.trials_log.append(trial)
             # Fase 1: proxy por metadatos (milisegundos, sin construir).
             best_task_S = self.best_S.get(meta.task, CURRENT_BEST_S[meta.task])
@@ -620,6 +697,7 @@ class Pipeline:
                 best_gm = gate_v.gm
                 best_kind = kind
                 self.best_kind = kind
+                self._update_best(meta.task, est_S)  # H20: trinquete
                 since_improvement = 0
                 best = {"iteration": self.iteration, "gm": gate_v.gm,
                         "S": cand_S, "ratios": gate_v.ratios,
@@ -701,6 +779,7 @@ class Pipeline:
             artifacts=artifacts, shadow_skipped=shadow_skipped,
             mode=self.mode.value, mode_transitions=self.mode_transitions,
             last_observation=self.last_observation,
+            tunneled=tunneled,
             partition=(self.partition.as_dict() if self.partition else None),
             calibration=(self.calibration.as_dict() if self.calibration else None),
             best_gm_by_side=dict(self.best_gm_by_side),

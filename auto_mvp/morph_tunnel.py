@@ -8,12 +8,13 @@ llamadas) y su modelo de costo (T y Q como cantidades de primera
 clase). Este módulo es ese motor, sobre esa formalización:
 
 - Opera sobre el grafo de llamadas de Qualtran (``qualtran_bridge``):
-  reordena y reemplaza BLOQUES, no solo pruebas paramétricas fijas.
-  Un "túnel" es un salto en el paisaje de costo: reemplazar un
-  bloque por otro equivalente (o reordenar dos bloques que conmutan)
-  para cruzar una barrera que la búsqueda paramétrica no cruza
-  (ej. reemplazar la búsqueda de Chien por inversión por lotes
+  reemplaza BLOQUES, no solo pruebas paramétricas fijas. Un "túnel"
+  es un salto en el paisaje de costo: reemplazar un bloque por otro
+  equivalente para cruzar una barrera que la búsqueda paramétrica no
+  cruza (ej. reemplazar la búsqueda de Chien por inversión por lotes
   Montgomery: el circuito salta de T=1,511,522 a T=1,315,731).
+  El motor NO reordena bloques: no verifica conmutación en ningún
+  sitio, así que un reordenamiento nunca se propone ni se aplica.
 - Cada regla de reemplazo trae su EVIDENCIA medida (cost_model
   exacto o verificador oficial) y su delta de costo MEDIDO. Una
   regla sin evidencia no se aplica: el motor nunca tunela con un
@@ -26,22 +27,45 @@ clase). Este módulo es ese motor, sobre esa formalización:
 Reglas reales del registro (medidas, no proyectadas):
 - "chien-montgomery-b17": Chien -> Montgomery b=17 (bloque).
   T 1,511,522 -> 1,315,731, Q igual (1,414). Evidencia: cost_model
-  exacto + montgomery-v4 INFORME_V4.md (S=3.2331e12, medido).
+  exacto, registrado en tests/test_auto_mvp_v060.py
+  (test_tunnel_montgomery_measured): S=3.2331e12, medido. El
+  archivo montgomery-v4 INFORME_V4.md NO existe en el repo y no
+  se cita.
 - "multiplier-toom4": multiplicador Toom-3 -> Toom-4 (circuito).
   S 1.99836e13 -> 1.923348e13 (Q=1,899, R=1.22901). Evidencia:
-  verificador oficial 102,400 shots (dqi-toom4-v1-e2-102400).
-  El delta en T se deriva de los S medidos, con la fórmula escrita.
+  dqi_cost.estimate_variant(42, v1=True, e2=True) en
+  auto_mvp/circuits/cost_models/dqi_cost.py: Q=1,899, T=4,477,394,
+  S=1.923348e13 (kernel 144398281 de Kaggle, medido en el
+  verificador oficial). El delta en T se deriva de los S medidos,
+  con la fórmula escrita.
+- Cada regla cita su artefacto en ``evidence_artifact`` (ruta
+  relativa a la raíz del repo): el constructor comprueba que el
+  archivo exista y falla si no existe. Una cita a un archivo que
+  no está en el repo es un error, no una evidencia.
 """
 from __future__ import annotations
 
 import copy
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable
 
 from .qualtran_bridge import Block, CallGraph
 
 # S = R * Q^2 * T (DQI). Con Q y R fijos, el delta en T sale de los S.
 DQI_R = 1.22901
+
+
+def _repo_root() -> Path:
+    """La raíz del repo (el directorio con pyproject.toml).
+
+    Se busca hacia arriba desde este archivo: así funciona tanto
+    desde el repo como desde una copia vendida (build/lib).
+    """
+    for parent in Path(__file__).resolve().parents:
+        if (parent / "pyproject.toml").is_file():
+            return parent
+    return Path(__file__).resolve().parents[1]
 
 
 @dataclass
@@ -60,9 +84,16 @@ class ReplacementRule:
         o "circuit" (se reemplaza un subsistema entero).
     evidence: la verificación medida que respalda la equivalencia
         (obligatoria: una regla sin evidencia no se aplica).
+    evidence_artifact: ruta relativa a la raíz del repo del
+        artefacto que registra la medición citada en ``evidence``
+        (módulo, nota o test). Si se cita, el archivo tiene que
+        existir: el constructor falla si no existe. Vacío = la
+        regla no cita artefacto (solo vale para reglas sintéticas
+        de test; las reglas del registro RULES siempre citan uno).
     requires_order: (a, b) — la regla solo aplica si el bloque a
         precede al bloque b en los hijos del padre (precondición de
-        orden; el motor puede tunelar reordenando primero).
+        orden; si no se cumple, la regla no aplica: el motor NO
+        reordena, porque no verifica conmutación).
     """
     name: str
     target: str
@@ -75,11 +106,20 @@ class ReplacementRule:
     r: float = DQI_R
     scope: str = "block"
     evidence: str = ""
+    evidence_artifact: str = ""
     requires_order: tuple[str, str] | None = None
 
     def __post_init__(self):
         if not self.evidence:
             raise ValueError(f"la regla {self.name!r} no tiene evidencia medida")
+        if self.evidence_artifact:
+            path = _repo_root() / self.evidence_artifact
+            if not path.is_file():
+                raise ValueError(
+                    f"la regla {self.name!r} cita el artefacto "
+                    f"{self.evidence_artifact!r}, que no existe en el repo "
+                    f"(se buscó en {path}); cita un artefacto real o quita "
+                    f"la cita")
         if self.delta_T is None:
             if None in (self.s_before, self.s_after, self.q):
                 raise ValueError(
@@ -131,7 +171,7 @@ class TunnelMove:
     replacement: str
     old_T: float | None
     new_T: float | None
-    kind: str = "replace"  # "replace" | "reorder"
+    kind: str = "replace"  # solo "replace": el motor ya no reordena
     evidence: str = ""
 
 
@@ -180,37 +220,22 @@ def _apply_rule(graph: CallGraph, rule: ReplacementRule) -> CallGraph | None:
     return new
 
 
-def _reorder(graph: CallGraph, a: str, b: str) -> CallGraph | None:
-    """Intercambia dos bloques hermanos (solo si conmutan: se declara
-    en la regla; aquí el llamador ya lo verificó). Devuelve el grafo
-    reordenado o None si no son hermanos."""
-    new = copy.deepcopy(graph)
-    parent = _parent_of(new.root, a) or _parent_of(new.root, b)
-    if parent is None:
-        return None
-    names = [c.name for c, _ in parent.children]
-    kinds = [c.kind for c, _ in parent.children]
-    seq = names if a in names and b in names else kinds
-    if a not in seq or b not in seq:
-        return None
-    i, j = seq.index(a), seq.index(b)
-    parent.children[i], parent.children[j] = parent.children[j], parent.children[i]
-    return new
-
-
 def tunnel(graph: CallGraph, rules: list[ReplacementRule],
            max_moves: int = 10, method: str = "greedy",
            verify: Callable[[CallGraph], bool] | None = None) -> TunnelResult:
-    """Tunela por el paisaje de costo: reemplaza y reordena bloques.
+    """Tunela por el paisaje de costo: reemplaza bloques.
 
     method "greedy": en cada paso aplica la regla que más baja T.
     method "beam": explora varias secuencias (ancho 3) y se queda
-    con la mejor. Un reordenamiento (delta 0) se usa como túnel
-    cuando ninguna regla aplica por orden: reordena dos bloques que
-    conmutan para que una regla con precondición de orden aplique.
+    con la mejor. Una regla con precondición de orden
+    (``requires_order``) que no se cumple simplemente no aplica:
+    el motor NO reordena bloques para desbloquearla, porque no
+    verifica conmutación en ningún sitio.
     ``verify`` es el gancho de integridad (ej. el filtro de
-    integridad): si un grafo tunelado no lo pasa, ese movimiento se
-    descarta.
+    integridad): se llama con cada grafo candidato tunelado; si
+    devuelve False, ese candidato se descarta y no se aplica, y la
+    búsqueda sigue con las demás reglas (no se aborta). Si es None,
+    no se filtra nada.
     """
     baseline_T = graph.total_T()
     baseline_Q = graph.total_Q()
@@ -245,39 +270,12 @@ def tunnel(graph: CallGraph, rules: list[ReplacementRule],
                                     old_T=old_T, new_T=new_T,
                                     evidence=rule.evidence))
             continue
-        # Ninguna regla mejora: ¿un reordenamiento desbloquea una?
-        unlocked = False
-        for rule in rules:
-            if rule.requires_order is None or rule.applies_to(current):
-                continue
-            a, b = rule.requires_order
-            reord = _reorder(current, a, b)
-            if reord is None:
-                continue
-            if not rule.applies_to(reord):
-                continue
-            cand = _apply_rule(reord, rule)
-            if cand is None:
-                continue
-            new_T = cand.total_T()
-            old_T = current.total_T()
-            if new_T is None or old_T is None or new_T >= old_T:
-                continue
-            if verify is not None and not verify(cand):
-                continue
-            moves.append(TunnelMove(rule="reorder", target=f"{a}<->{b}",
-                                    replacement=f"{a}<->{b}",
-                                    old_T=old_T, new_T=old_T, kind="reorder",
-                                    evidence="reordenamiento de bloques que conmutan"))
-            moves.append(TunnelMove(rule=rule.name, target=rule.target,
-                                    replacement=rule.replacement,
-                                    old_T=old_T, new_T=new_T,
-                                    evidence=rule.evidence))
-            current = cand
-            unlocked = True
-            break
-        if not unlocked:
-            break
+        # Ninguna regla aplica o mejora: se para. No se reordena
+        # para desbloquear reglas con precondición de orden: el
+        # motor no verifica conmutación (H9: la rama de desbloqueo
+        # por reorder se eliminó; era código muerto que afirmaba
+        # conmutación sin comprobarla).
+        break
     else:
         stopped = "límite de movimientos"
     return TunnelResult(graph=current, moves=moves, baseline_T=baseline_T,
@@ -331,12 +329,22 @@ RULES: list[ReplacementRule] = [
         name="chien-montgomery-b17", target="chien",
         replacement="montgomery-b17", delta_T=-195_791.0, delta_Q=0.0,
         scope="block",
-        evidence=("cost_model exacto + montgomery-v4 INFORME_V4.md: "
-                  "Q=1,414, T=1,511,522 -> 1,315,731, S=3.2331e12, medido")),
+        evidence=("cost_model exacto, registrado en "
+                  "tests/test_auto_mvp_v060.py "
+                  "(test_tunnel_montgomery_measured): Q=1,414, "
+                  "T=1,511,522 -> 1,315,731, S=3.2331e12, medido"),
+        evidence_artifact="tests/test_auto_mvp_v060.py"),
+    # Medido en el ensamble Toom-3+V1+E2 (Q=1,899), no en la semilla
+    # BM+Forney (Q=1,414): el delta es el del ensamble. La regla
+    # aplica a grafos con bloque "multiplier"; quien la aplique a
+    # otro circuito mezcla deltas de circuitos distintos.
     ReplacementRule(
         name="multiplier-toom4", target="multiplier",
         replacement="toom4", s_before=1.99836e13, s_after=1.923348e13,
         q=1899.0, r=DQI_R, scope="circuit",
-        evidence=("verificador oficial 102,400 shots "
-                  "(dqi-toom4-v1-e2-102400): S=1.923348e13, medido")),
+        evidence=("dqi_cost.estimate_variant(42, v1=True, e2=True) en "
+                  "auto_mvp/circuits/cost_models/dqi_cost.py: Q=1,899, "
+                  "T=4,477,394, S=1.923348e13 (kernel 144398281 de "
+                  "Kaggle, medido en el verificador oficial)"),
+        evidence_artifact="auto_mvp/circuits/cost_models/dqi_cost.py"),
 ]

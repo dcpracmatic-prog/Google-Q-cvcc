@@ -53,10 +53,20 @@ class StepPlan:
 
     def move(self, step: str, before: str | None = None,
              after: str | None = None, directive: str = "") -> bool:
-        """Mueve un paso antes/después de otro. False si no existe."""
+        """Mueve un paso antes/después de otro. False si no existe.
+
+        Si el destino (before/after) no está en el plan, devuelve
+        False y NO mueve nada: antes caía al final en silencio.
+        """
         idx = next((i for i, s in enumerate(self.steps)
                     if s["step"] == step), None)
         if idx is None:
+            return False
+        if before is not None and not any(s["step"] == before
+                                          for s in self.steps):
+            return False
+        if after is not None and not any(s["step"] == after
+                                         for s in self.steps):
             return False
         item = self.steps.pop(idx)
         if before is not None:
@@ -75,7 +85,16 @@ class StepPlan:
 
     def replace_method(self, step: str, method: str,
                        directive: str = "") -> bool:
-        """Reprograma una celda: cambia el método de un paso."""
+        """Reprograma una celda: cambia el método de un paso.
+
+        Rechaza (False, sin tocar nada) el paso desconocido y el
+        método que no es válido para ese paso (ver METHODS): antes
+        aceptaba cualquiera, p. ej. method='banana'.
+        """
+        if step not in STEPS:
+            return False
+        if method not in METHODS.get(step, ()):
+            return False
         for s in self.steps:
             if s["step"] == step:
                 old = s["method"]
@@ -93,7 +112,15 @@ class StepPlan:
     def insert(self, step: str, method: str = "",
                before: str | None = None, after: str | None = None,
                directive: str = "") -> bool:
-        """Inserta un paso nuevo antes/después de otro (o al final)."""
+        """Inserta un paso nuevo antes/después de otro (o al final).
+
+        Rechaza (False) el paso desconocido y el método que no es
+        válido para ese paso (ver METHODS); "" significa sin método.
+        """
+        if step not in STEPS:
+            return False
+        if method and method not in METHODS.get(step, ()):
+            return False
         if any(s["step"] == step for s in self.steps):
             return False
         item = {"step": step, "method": method, "params": {}}

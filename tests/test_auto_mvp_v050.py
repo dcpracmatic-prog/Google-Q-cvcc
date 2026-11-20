@@ -125,6 +125,10 @@ def test_pipeline_goal_stop():
         # con meta_mvp=30.00, pero es una HIPÓTESIS, no el circuito
         # que entrega el puntaje: la meta NO se da por alcanzada y la
         # búsqueda sigue (el candidato real, GM 25.84, no llega a 30).
+        # H20 (trinquete del mejor): tras promover el target, el
+        # candidato real ya no pasa el proxy (no supera el S del
+        # target promovido), así que es proxy_rejected, no
+        # gate_rejected como antes del trinquete.
         target = {"meta": meta_dqi(400, 90_000, {"S": 400}),
                   "metrics": {"Q": 400, "T": 90_000, "eps_plus": EPS},
                   "kind": "target"}
@@ -132,7 +136,7 @@ def test_pipeline_goal_stop():
         pipe4 = Pipeline(proxy4, runs_dir=Path(d) / "r4", meta_mvp=30.0)
         res4 = pipe4.run(iter([target, dict(cand)]))
         assert not res4.goal_reached and res4.promoted == 1, res4
-        assert res4.screened == 2 and res4.gate_rejected == 1, res4
+        assert res4.screened == 2 and res4.proxy_rejected == 1 and res4.gate_rejected == 0, res4
         assert res4.best["kind"] == "target" and res4.best_gm > 30.0
         assert res4.stopped == "stream agotado", res4.stopped
 
