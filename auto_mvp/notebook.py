@@ -51,6 +51,8 @@ _TMP = Path(tempfile.mkdtemp(prefix="auto_mvp___TASK___"))
 (_TMP / "module.py").write_text(__MODULE__, encoding="utf-8")
 _SPEC = importlib.util.spec_from_file_location("module___TASK__", _TMP / "module.py")
 _MOD = importlib.util.module_from_spec(_SPEC)
+import sys as _sys
+_sys.modules["module___TASK__"] = _MOD  # sin esto, @dataclass revienta (v2.17.24)
 _SPEC.loader.exec_module(_MOD)
 _TASK_MODULES["__TASK__"] = _MOD
 print(json.dumps(_MOD.verify(), indent=2, ensure_ascii=False))

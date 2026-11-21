@@ -61,7 +61,6 @@ from __future__ import annotations
 
 import ast
 import hashlib
-import importlib.util
 import json
 import re
 import subprocess
@@ -71,6 +70,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .llm import LLMError
+from .module_loading import load_module_from_path
 
 # NOTA (v2.17.1, bug que tumbó el Notebook v2 en Kaggle): este módulo
 # NO importa `build_hybrid_bm` ni `llm_auto_dqi` al cargarse, porque
@@ -725,10 +725,7 @@ def run_autonomous(llm: Any | None, n: int = 30, m: int = 255,
                 tmp = Path(output_dir) / "novel_nslot.py" \
                     if output_dir is not None else Path("novel_nslot.py")
                 tmp.write_text(code, encoding="utf-8")
-                spec = importlib.util.spec_from_file_location(
-                    "novel_nslot", tmp)
-                mod = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(mod)
+                mod = load_module_from_path("novel_nslot", tmp)
                 ns = mod.novel_nslot(n)
                 if not isinstance(ns, int) or ns < min_nslot:
                     raise ValueError(
@@ -990,10 +987,7 @@ def run_tres_tareas(llm: Any | None, n: int = 30, m: int = 255,
             tmp = (out_dir / "novel_seed.py") if out_dir else Path(
                 "novel_seed.py")
             tmp.write_text(code, encoding="utf-8")
-            spec = importlib.util.spec_from_file_location(
-                "novel_seed", tmp)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            mod = load_module_from_path("novel_seed", tmp)
             knobs = mod.novel_seed(n, m)
             if not isinstance(knobs, dict):
                 raise ValueError("novel_seed no devolvió un dict")
@@ -1097,10 +1091,7 @@ def run_tres_tareas(llm: Any | None, n: int = 30, m: int = 255,
             tmp = (out_dir / "novel_nslot.py") if out_dir else Path(
                 "novel_nslot.py")
             tmp.write_text(code, encoding="utf-8")
-            spec = importlib.util.spec_from_file_location(
-                "novel_nslot", tmp)
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
+            mod = load_module_from_path("novel_nslot", tmp)
             ns = mod.novel_nslot(n)
             if not isinstance(ns, int) or ns < min_nslot:
                 raise ValueError(f"novel_nslot devolvió {ns!r}")

@@ -17,7 +17,6 @@ que el proxy ya no ignora el costo de síntesis de rotaciones:
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
@@ -44,10 +43,8 @@ def _official_rotation_t_count():
     sandbox = Path("/home/hatch/workspace/sandbox-run/competition-verifiers"
                    "/invsqrt/verify_submission_invsqrt.py")
     path = vendored if vendored.is_file() else sandbox
-    spec = importlib.util.spec_from_file_location("verif_invsqrt", str(path))
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["verif_invsqrt"] = mod
-    spec.loader.exec_module(mod)
+    from auto_mvp.module_loading import load_module_from_path
+    mod = load_module_from_path("verif_invsqrt", str(path))
     return mod.rotation_t_count
 
 

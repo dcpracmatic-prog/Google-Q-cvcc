@@ -35,6 +35,7 @@ from .maxcut import (Partition, greedy_mis, morph as maxcut_morph,
                      partition_then_select)
 from .json_directive import (ALL_METHODS, METHODS, STEPS, Directive,
                              load_plan, parse_directive)
+from .module_loading import load_module_from_path
 from .morph_tunnel import (DQI_R, RULES, ReplacementRule, TunnelMove,
                            TunnelResult, tunnel)
 from .mvp import AutoMvp, MvpResult
@@ -73,7 +74,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.17.23"
+__version__ = "2.17.24"
 
 __all__ = [
     "Checkpoint",
@@ -98,7 +99,7 @@ __all__ = [
     "QUALTRAN_VERSION", "Block", "CallGraph", "from_qualtran_bloq",
     "DQI_R", "RULES", "ReplacementRule", "TunnelMove", "TunnelResult",
     "tunnel",
-    "ALL_METHODS", "METHODS", "STEPS", "Directive", "load_plan",
+    "ALL_METHODS", "METHODS", "STEPS", "Directive", "load_module_from_path", "load_plan",
     "parse_directive",
     "DEFAULT_STEPS", "StepPlan",
     "AdaptiveOrchestrator", "OrchestratorResult",

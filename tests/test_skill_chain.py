@@ -15,7 +15,6 @@ Cada test mide con números, no con promesas:
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -42,17 +41,15 @@ def _chain_config() -> dict:
 
 
 def _load_module(name: str, path: Path):
-    spec = importlib.util.spec_from_file_location(name, path)
-    mod = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(mod)
-    return mod
+    from auto_mvp.module_loading import load_module_from_path
+    return load_module_from_path(name, path)
 
 
 def test_chain_default_plan_tunnels_and_promotes_local(tmp_path):
     out = run_vqcc_chain(_chain_config(), [_bm_candidate()],
                          runs_dir=tmp_path / "runs",
                          best_S={"dqi": 3.714e12})
-    assert out["version"] == "2.17.23"
+    assert out["version"] == "2.17.24"
     assert out["plan_order"] == ["tunnel", "proxy", "gate", "verify",
                                  "compile", "observe"]
     assert out["verify_before_compile"] is True

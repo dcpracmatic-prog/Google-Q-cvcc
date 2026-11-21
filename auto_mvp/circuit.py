@@ -26,13 +26,14 @@ El resto del repo (v1.x, números) sigue siendo solo stdlib.
 """
 from __future__ import annotations
 
-import importlib.util
 import json
 import subprocess
 import sys
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+
+from .module_loading import load_module_from_path
 
 _HERE = Path(__file__).resolve().parent
 _CIRCUITS = _HERE / "circuits"
@@ -71,13 +72,7 @@ def _load_verifier_dqi():
             "numpy no disponible en este entorno: el verificador "
             f"oficial lo necesita ({exc})") from exc
     _require_kickmix()
-    spec = importlib.util.spec_from_file_location(
-        "verify_submission_dqi", str(VERIFIER_DQI))
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"no se puede cargar {VERIFIER_DQI}")
-    mod = importlib.util.module_from_spec(spec)
-    sys.modules["verify_submission_dqi"] = mod
-    spec.loader.exec_module(mod)
+    mod = load_module_from_path("verify_submission_dqi", str(VERIFIER_DQI))
     return mod
 
 
@@ -302,16 +297,7 @@ def _load_verifier():
             "numpy no disponible en este entorno: el verificador "
             f"oficial lo necesita ({exc})") from exc
     _require_kickmix()
-    spec = importlib.util.spec_from_file_location(
-        "verify_submission_invsqrt", str(VERIFIER_INVSQRT))
-    if spec is None or spec.loader is None:
-        raise RuntimeError(f"no se puede cargar {VERIFIER_INVSQRT}")
-    mod = importlib.util.module_from_spec(spec)
-    # El verificador usa @dataclasses.dataclass: la clase se crea
-    # buscando su módulo en sys.modules; sin registrarlo antes, el
-    # decorador falla con AttributeError.
-    sys.modules["verify_submission_invsqrt"] = mod
-    spec.loader.exec_module(mod)
+    mod = load_module_from_path("verify_submission_invsqrt", str(VERIFIER_INVSQRT))
     return mod
 
 
