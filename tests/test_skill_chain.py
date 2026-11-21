@@ -49,7 +49,7 @@ def test_chain_default_plan_tunnels_and_promotes_local(tmp_path):
     out = run_vqcc_chain(_chain_config(), [_bm_candidate()],
                          runs_dir=tmp_path / "runs",
                          best_S={"dqi": 3.714e12})
-    assert out["version"] == "2.17.24"
+    assert out["version"] == "2.17.25"
     assert out["plan_order"] == ["tunnel", "proxy", "gate", "verify",
                                  "compile", "observe"]
     assert out["verify_before_compile"] is True

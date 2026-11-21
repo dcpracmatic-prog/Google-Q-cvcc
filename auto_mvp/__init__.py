@@ -74,7 +74,7 @@ from .qualtran_bridge import (QUALTRAN_VERSION, Block, CallGraph,
                               from_qualtran_bloq)
 from .step_plan import DEFAULT_STEPS, StepPlan
 
-__version__ = "2.17.24"
+__version__ = "2.17.25"
 
 __all__ = [
     "Checkpoint",
