@@ -554,11 +554,26 @@ class AdaptiveOrchestrator:
                                 system=candidate.get("system",
                                                      "FeMoCo76o113e"))
                         else:
-                            res = verify_circuit_file(path, task)
+                            # El candidato puede fijar el alcance de la
+                            # verificación oficial (shots / max_x); si no,
+                            # la verificación oficial es completa. Solo se
+                            # pasan los overrides fijados: un verificador
+                            # (o un doble de test) con la firma
+                            # (path, task) sigue funcionando.
+                            verify_kwargs = {}
+                            for _key in ("verify_shots_per_x",
+                                         "verify_num_shots", "verify_max_x"):
+                                _val = candidate.get(_key)
+                                if _val is not None:
+                                    verify_kwargs[_key[7:]] = _val
+                            res = verify_circuit_file(path, task,
+                                                      **verify_kwargs)
                         trace["ok"] = bool(res.ok)
                         trace["verified_by"] = res.verified_by
                         trace["failures"] = list(res.failures)
                         trace["official"] = True
+                        trace["S"] = res.S
+                        trace["metrics"] = dict(res.metrics)
                         if not res.ok:
                             trace["veto"] = True
                             trace["reason"] = (
@@ -575,6 +590,8 @@ class AdaptiveOrchestrator:
                         trace["ok"] = bool(res.ok)
                         trace["verified_by"] = res.verified_by
                         trace["failures"] = list(res.failures)
+                        trace["S"] = res.S
+                        trace["metrics"] = dict(res.metrics)
             elif name in NOT_WIRED:
                 trace["ok"] = False
                 trace["reason"] = NOT_WIRED[name]

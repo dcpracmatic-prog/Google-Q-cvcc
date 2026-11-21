@@ -108,6 +108,33 @@
     "type": "function"
   },
   {
+    "type": "function",
+    "function": {
+      "name": "run_vqcc_chain",
+      "description": "La cadena completa VQCC en una sola llamada: parsea la directiva JSON, corre el orquestador con el túnel MORPH, pasa por el pipeline y cierra con el verificador oficial (con veto). Devuelve un solo veredicto: PASS_OFICIAL, PASS_PARCIAL, PASS_LOCAL, LOCAL_FALLO, PASS_SIN_VERIFY, VETO, VETO_SIN_VERIFICADOR o RECHAZADO.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "config": {
+            "type": "object",
+            "description": "config JSON: meta_mvp, steps, directives en lenguaje natural, budget"
+          },
+          "candidates": {
+            "type": "array",
+            "description": "candidatos (name, kind, meta {task, metrics}, metrics, call_graph opcional, circuit_path/kmb_path/factorization_path opcional para verificación oficial)"
+          },
+          "best_S": {
+            "type": "object",
+            "description": "mejor S conocido por tarea, ej. {\"dqi\": 3.714e12}"
+          }
+        },
+        "required": [
+          "candidates"
+        ]
+      }
+    }
+  },
+  {
     "function": {
       "description": "Pasa el filtro de integridad obligatorio sobre una evidencia de circuito (sigma, C/B restaurados, dreg/alpha en cero, temporales, shots). Un 'projection' (solo números, sin circuito) NUNCA pasa este filtro.",
       "name": "check_integrity",

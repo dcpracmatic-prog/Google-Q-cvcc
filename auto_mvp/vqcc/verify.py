@@ -22,7 +22,6 @@ LÍMITES HONESTOS:
 """
 from __future__ import annotations
 
-import importlib.util
 import math
 import os
 import subprocess
@@ -37,6 +36,8 @@ from .costs import ratio, s_chem, s_dqi, s_invsqrt
 STARTER_KIT = Path.home() / "workspace/sandbox-run/starter-kit"
 COMPETITION_VERIFIERS = Path.home() / "workspace/sandbox-run/competition-verifiers"
 VENV_PYTHON = Path.home() / "workspace/sandbox-run/venv/bin/python"
+KAGGLE_COMPETITION = Path(
+    "/kaggle/input/competitions/google-verifiable-quantum-circuit-compilation")
 
 
 @dataclass
@@ -173,52 +174,105 @@ def verify_chemistry_factorization(
     )
 
 
+def _kaggle_circuit_verifier(task: str):
+    """En Kaggle: (python, script, env) para el verificador oficial.
+
+    El python es el del kernel; el script es el del dataset oficial
+    (verifiers/<tarea>/verify_submission_<tarea>.py) y el kickmix.so
+    del dataset va en PYTHONPATH del subproceso, así `import kickmix`
+    carga el .so real y no el paquete pip vacío. Si algo falta,
+    devuelve None (fail-closed: el llamador reporta que el
+    verificador no pudo correr, nunca un PASS inventado).
+    """
+    from .kaggle_init import detect_environment
+    if detect_environment() != "kaggle":
+        return None
+    if task == "invsqrt":
+        script = KAGGLE_COMPETITION / "verifiers/invsqrt/verify_submission_invsqrt.py"
+    elif task == "dqi":
+        script = KAGGLE_COMPETITION / "verifiers/dqi/verify_submission_dqi.py"
+    else:
+        return None
+    if not script.is_file():
+        return None
+    # kickmix.so del dataset (<dataset>/kickmix/kickmix.so): el dir
+    # que lo contiene va en PYTHONPATH. Si hay varios, manda el del
+    # dir "kickmix".
+    found = sorted(KAGGLE_COMPETITION.glob("**/kickmix*.so"))
+    if not found:
+        return None
+    found.sort(key=lambda p: (p.parent.name != "kickmix", str(p)))
+    env = dict(os.environ)
+    pp = str(found[0].parent)
+    env["PYTHONPATH"] = pp + (":" + env["PYTHONPATH"]
+                             if env.get("PYTHONPATH") else "")
+    return (sys.executable, script, env)
+
+
 def verify_circuit_file(
     circuit_path: str | Path, task: str,
     shots_per_x: int | None = None, num_shots: int | None = None,
+    max_x: int | None = None,
 ) -> CircuitVerifyResult:
     """Verificación OFICIAL de un .kmb/.kmx con kickmix (invsqrt o DQI).
 
     CARO por diseño: invsqrt completo son 200,540,928 shots, DQI 102,400.
     Por defecto usa los valores del verificador oficial; para iterar
-    rápido se pasa un número de shots reducido y el resultado se marca
-    como parcial (verified_by='official-partial'), nunca como PASS total.
-    Requiere el venv con kickmix; si no está, devuelve verified=False.
+    rápido se pasa un número de shots reducido (o un max_x menor) y el
+    resultado se marca como parcial (verified_by='official-partial'),
+    nunca como PASS total. En local usa el venv con kickmix; en Kaggle
+    usa el python del kernel + los verificadores y el kickmix.so del
+    dataset oficial. Si el verificador no puede correr, devuelve
+    verified=False con el motivo, NUNCA un PASS inventado.
     """
     path = Path(circuit_path)
     if not path.is_file():
         return CircuitVerifyResult(False, failures=[f"no existe: {path}"],
                                    verified_by="none")
-    if not VENV_PYTHON.is_file():
-        return CircuitVerifyResult(False, failures=["venv con kickmix no encontrado"],
-                                   verified_by="none")
-    if importlib.util.find_spec("kickmix") is None and not VENV_PYTHON.is_file():
-        return CircuitVerifyResult(False, failures=["kickmix no disponible"],
-                                   verified_by="none")
     if task == "invsqrt":
-        script = COMPETITION_VERIFIERS / "invsqrt/verify_submission_invsqrt.py"
-        cmd = [str(VENV_PYTHON), str(script), str(path)]
-        if shots_per_x:
-            cmd += ["--shots-per-x", str(shots_per_x)]
-        full = shots_per_x in (None, 64)
+        script_local = COMPETITION_VERIFIERS / "invsqrt/verify_submission_invsqrt.py"
     elif task == "dqi":
-        script = COMPETITION_VERIFIERS / "dqi/verify_submission_dqi.py"
-        cmd = [str(VENV_PYTHON), str(script), str(path)]
-        if num_shots:
-            cmd += ["--num-shots", str(num_shots)]
-        full = num_shots in (None, 102_400)
+        script_local = COMPETITION_VERIFIERS / "dqi/verify_submission_dqi.py"
     else:
         return CircuitVerifyResult(False, failures=[f"tarea no es circuito: {task}"],
                                    verified_by="none")
+    env = None
+    if VENV_PYTHON.is_file():
+        python, script = str(VENV_PYTHON), script_local
+    else:
+        # Sin venv (Kaggle): el verificador del dataset oficial.
+        resolved = _kaggle_circuit_verifier(task)
+        if resolved is None:
+            return CircuitVerifyResult(
+                False,
+                failures=["verificador oficial no disponible: sin venv con "
+                          "kickmix y sin verificador de Kaggle"],
+                verified_by="none")
+        python, script, env = str(resolved[0]), resolved[1], resolved[2]
+    cmd = [python, str(script), str(path)]
+    if task == "invsqrt":
+        if shots_per_x:
+            cmd += ["--shots-per-x", str(shots_per_x)]
+        if max_x:
+            cmd += ["--max-x", str(max_x)]
+        full = shots_per_x in (None, 64) and max_x is None
+    else:
+        if num_shots:
+            cmd += ["--num-shots", str(num_shots)]
+        full = num_shots in (None, 102_400)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=3600,
+                           env=env)
     except subprocess.TimeoutExpired:
         return CircuitVerifyResult(False, failures=["verificador oficial: timeout > 3600 s"],
                                    verified_by="none")
     import json as _json
 
     try:
-        out = _json.loads(r.stdout.strip().splitlines()[-1] if r.stdout.strip() else "{}")
+        # El verificador imprime SOLO el JSON del veredicto, con
+        # sangría (varias líneas): se parsea el stdout completo, no
+        # la última línea (que es "}" y no parsea).
+        out = _json.loads(r.stdout.strip() if r.stdout.strip() else "{}")
     except Exception:
         out = {}
     if r.returncode != 0 or out.get("status") != "PASS":

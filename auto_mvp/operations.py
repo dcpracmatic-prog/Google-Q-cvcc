@@ -175,6 +175,174 @@ def run_orchestrator(candidates: list[dict[str, Any]],
             tmp.cleanup()
 
 
+CHAIN_STEPS: list[dict[str, Any]] = [
+    {"step": "tunnel", "method": "greedy", "params": {}},
+    {"step": "proxy", "method": "metadata", "params": {}},
+    {"step": "gate", "method": "meta_mvp", "params": {}},
+    {"step": "verify", "method": "official", "params": {}},
+    {"step": "compile", "method": "local", "params": {}},
+    {"step": "observe", "method": "observer", "params": {}},
+]
+"""El plan de la cadena completa (la Skill/Tool): verify ANTES de
+compile (H14) para que el veto del verificador oficial bloquee la
+compilación. Si la config trae pasos, mandan los suyos."""
+
+
+def run_vqcc_chain(config: dict[str, Any] | None = None,
+                   candidates: list[dict[str, Any]] | None = None,
+                   runs_dir: str | Path | None = None,
+                   best_S: dict[str, float] | None = None
+                   ) -> dict[str, Any]:
+    """Corre la cadena completa VQCC en una sola llamada (la Skill/Tool).
+
+    Entrada: la config JSON (meta_mvp, steps, directives, budget) y
+    la lista de candidatos. Cada candidato trae name, kind, meta
+    {task, metrics}, metrics y, si aplica, call_graph y la ruta de
+    su artefacto real (circuit_path / kmb_path / kmx_path para un
+    circuito, factorization_path para química). Opcionalmente, el
+    candidato fija el alcance de la verificación oficial con
+    verify_shots_per_x / verify_num_shots / verify_max_x (si no se
+    fijan, la verificación oficial es completa).
+
+    La cadena: directiva JSON -> orquestador -> túnel MORPH ->
+    pipeline (proxy, puerta) -> verificador oficial (con veto) ->
+    compilación -> observación. Si la config no trae pasos, se usa
+    CHAIN_STEPS (verify antes de compile). Si la config trae pasos,
+    mandan los suyos y el orden queda registrado en "plan_order"
+    (con "verify_before_compile").
+
+    Salida: un solo veredicto JSON. "verdict" es uno de:
+    PASS_OFICIAL (promovido y verificado oficial completo),
+    PASS_PARCIAL (promovido y verificado oficial con shots
+    reducidos: dominio completo a 8 shots por x, como los kernels
+    v5/v6, o pantalla), PASS_LOCAL (promovido pero la verificación
+    fue solo local: el candidato no trae artefacto real, así que
+    NO es un PASS oficial), LOCAL_FALLO (promovido pero la
+    verificación local falló: la local no veta, el llamador debe
+    mirar "verify"), PASS_SIN_VERIFY (promovido sin que el plan
+    trajera el paso verify), VETO (el verificador oficial dio
+    FAIL: el candidato no se promueve ni se compila),
+    VETO_SIN_VERIFICADOR (veto porque el artefacto no existe o el
+    verificador no pudo correr: fail-closed, no es un FAIL
+    oficial) o RECHAZADO (nada superó proxy/puerta). Las
+    directivas no parseadas nunca se tiran: quedan en "unparsed"
+    con su motivo.
+    """
+    from . import __version__ as _pkg_version
+
+    config = dict(config or {})
+    candidates = list(candidates or [])
+    plan_cfg = load_plan(config)
+    meta_mvp = float(plan_cfg["meta_mvp"]) \
+        if plan_cfg["meta_mvp"] is not None else 30.0
+    task = "dqi"
+    for c in candidates:
+        m = c.get("meta") or {}
+        if isinstance(m, dict) and m.get("task"):
+            task = str(m["task"])
+            break
+    tmp = tempfile.TemporaryDirectory() if runs_dir is None else None
+    try:
+        dest = Path(runs_dir) if runs_dir is not None else Path(tmp.name) / "runs"
+        pipe = Pipeline(
+            proxy=MetadataProxy(_spec(task), margin=DEFAULT_MARGIN),
+            gate=PromotionGate(meta_mvp),
+            runs_dir=dest, time_budget_seconds=None)
+        if best_S:
+            pipe.best_S.update({str(k): float(v) for k, v in best_S.items()})
+        if plan_cfg["steps"]:
+            plan = StepPlan(steps=[dict(s) for s in plan_cfg["steps"]])
+            steps_from_config = True
+        else:
+            plan = StepPlan(steps=[dict(s, params=dict(s.get("params", {})))
+                                   for s in CHAIN_STEPS])
+            steps_from_config = False
+        orch = AdaptiveOrchestrator(pipe, plan)
+        directives = [d.raw for d in plan_cfg["directives"] if d.parsed]
+        res = orch.run(iter(candidates), directives=directives)
+        verify_entries: list[dict[str, Any]] = []
+        for t in orch.step_log:
+            if t.get("step") != "verify":
+                continue
+            verify_entries.append({
+                "iteration": t.get("iteration"),
+                "ok": bool(t.get("ok")),
+                "official": bool(t.get("official")),
+                "verified_by": t.get("verified_by", ""),
+                "S": t.get("S"),
+                "metrics": t.get("metrics", {}),
+                "failures": list(t.get("failures", [])),
+                "veto": bool(t.get("veto", False)),
+                "reason": t.get("reason", ""),
+            })
+        tunnel_entries: list[dict[str, Any]] = []
+        for trial in pipe.trials_log:
+            tun = trial.get("tunnel")
+            if isinstance(tun, dict):
+                tunnel_entries.append(tun)
+        order = list(plan.order)
+        verify_before_compile = ("verify" in order and "compile" in order
+                                 and order.index("verify")
+                                 < order.index("compile"))
+        vetoed = [v for v in verify_entries if v["veto"]]
+        vetoed_official = [v for v in vetoed
+                           if v["verified_by"] in ("official",
+                                                   "official-partial")]
+        official_ok = [v for v in verify_entries
+                       if v["official"] and v["ok"]]
+        official_full = [v for v in official_ok
+                         if v["verified_by"] == "official"]
+        local_fail = [v for v in verify_entries
+                      if not v["official"] and not v["ok"]]
+        if vetoed_official:
+            verdict = "VETO"
+        elif vetoed:
+            verdict = "VETO_SIN_VERIFICADOR"
+        elif res.promoted == 0:
+            verdict = "RECHAZADO"
+        elif not verify_entries:
+            verdict = "PASS_SIN_VERIFY"
+        elif official_full:
+            verdict = "PASS_OFICIAL"
+        elif official_ok:
+            verdict = "PASS_PARCIAL"
+        elif local_fail:
+            verdict = "LOCAL_FALLO"
+        else:
+            verdict = "PASS_LOCAL"
+        return {
+            "verdict": verdict,
+            "version": _pkg_version,
+            "plan_order": order,
+            "steps_from_config": steps_from_config,
+            "verify_before_compile": verify_before_compile,
+            "decoded": {
+                "meta_mvp": plan_cfg["meta_mvp"],
+                "steps": plan_cfg["steps"],
+                "budget": plan_cfg["budget"],
+                "directives": [
+                    {"verb": d.verb, "params": d.params, "raw": d.raw,
+                     "parsed": d.parsed, "reason": d.reason}
+                    for d in plan_cfg["directives"]],
+            },
+            "unparsed": [{"verb": d.verb, "raw": d.raw, "reason": d.reason}
+                         for d in plan_cfg["unparsed"]],
+            "screened": res.screened, "proxy_rejected": res.proxy_rejected,
+            "gate_rejected": res.gate_rejected, "promoted": res.promoted,
+            "tunneled": res.tunneled, "best_gm": res.best_gm,
+            "goal_reached": res.goal_reached, "artifacts": res.artifacts,
+            "reprogrammings": res.reprogrammings,
+            "stopped": res.stopped, "meta_mvp": res.meta_mvp,
+            "elapsed_seconds": res.elapsed_seconds,
+            "verify": verify_entries,
+            "tunnel": tunnel_entries,
+            "step_log": [dict(t) for t in orch.step_log],
+        }
+    finally:
+        if tmp is not None:
+            tmp.cleanup()
+
+
 def check_integrity(evidence: dict[str, Any]) -> dict[str, Any]:
     """Pasa el filtro de integridad obligatorio sobre una evidencia.
 
@@ -399,6 +567,7 @@ OPERATIONS = {
     "apply_morph_tunnel": apply_morph_tunnel,
     "decode_json_config": decode_json_config,
     "run_orchestrator": run_orchestrator,
+    "run_vqcc_chain": run_vqcc_chain,
     "check_integrity": check_integrity,
     "export_module": export_module,
     "validate_submission": validate_submission,

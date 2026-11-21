@@ -148,7 +148,8 @@ def test_mcp_server_roundtrip():
     assert by_id[1]["serverInfo"]["name"] == "auto-mvp-vqcc"
     assert [t["name"] for t in by_id[2]["tools"]] == [
         "evaluate_candidate", "apply_morph_tunnel", "decode_json_config",
-        "run_orchestrator", "check_integrity", "export_module",
+        "run_orchestrator", "run_vqcc_chain", "check_integrity",
+        "export_module",
         "validate_submission", "combine_best", "promotion_gate",
         "mutate", "run_serial", "export_notebook"]
     gate = json.loads(by_id[3]["content"][0]["text"])
@@ -170,11 +171,11 @@ def test_tools_py_functions():
 
 def test_functions_json_schema():
     funcs = json.loads((SKILL / "functions.json").read_text())
-    assert isinstance(funcs, list) and len(funcs) == 12
+    assert isinstance(funcs, list) and len(funcs) == 13
     names = [f["function"]["name"] for f in funcs]
     assert names == ["evaluate_candidate", "apply_morph_tunnel",
                      "decode_json_config", "run_orchestrator",
-                     "check_integrity", "export_module",
+                     "run_vqcc_chain", "check_integrity", "export_module",
                      "validate_submission", "combine_best", "promotion_gate",
                      "mutate", "run_serial", "export_notebook"]
     for f in funcs:
@@ -190,7 +191,7 @@ def test_skill_files_and_readme():
     assert (SKILL / "functions.json").exists()
     readme = (REPO / "README.md").read_text()
     for op in ("evaluate_candidate", "apply_morph_tunnel", "decode_json_config",
-               "run_orchestrator", "check_integrity", "export_module",
+               "run_orchestrator", "run_vqcc_chain", "check_integrity", "export_module",
                "validate_submission", "combine_best", "promotion_gate",
                "mutate", "run_serial", "export_notebook"):
         assert op in readme

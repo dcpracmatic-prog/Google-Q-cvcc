@@ -35,6 +35,7 @@ from auto_mvp.operations import (apply_morph_tunnel as _apply_morph_tunnel,
                                  promotion_gate as _promotion_gate,
                                  run_orchestrator as _run_orchestrator,
                                  run_serial as _run_serial,
+                                 run_vqcc_chain as _run_vqcc_chain,
                                  validate_submission as _validate_submission)
 
 __all__ = [
@@ -42,6 +43,7 @@ __all__ = [
     "apply_morph_tunnel",
     "decode_json_config",
     "run_orchestrator",
+    "run_vqcc_chain",
     "check_integrity",
     "export_module",
     "validate_submission",
@@ -79,6 +81,16 @@ def run_orchestrator(candidates: list[dict[str, Any]],
                      ) -> dict[str, Any]:
     """Corre el orquestador adaptativo sobre candidatos + config."""
     return _run_orchestrator(candidates, config=config, best_S=best_S)
+
+
+def run_vqcc_chain(config: dict[str, Any] | None = None,
+                   candidates: list[dict[str, Any]] | None = None,
+                   best_S: dict[str, float] | None = None
+                   ) -> dict[str, Any]:
+    """La cadena completa en una llamada: directiva JSON -> orquestador
+    -> túnel MORPH -> pipeline -> verificador oficial (con veto)."""
+    return _run_vqcc_chain(config=config, candidates=candidates,
+                           best_S=best_S)
 
 
 def check_integrity(evidence: dict[str, Any]) -> dict[str, Any]:

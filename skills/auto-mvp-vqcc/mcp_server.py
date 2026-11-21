@@ -107,6 +107,24 @@ TOOLS = [
         },
     },
     {
+        "name": "run_vqcc_chain",
+        "description": ("La cadena completa VQCC en una llamada: directiva "
+                        "JSON -> orquestador -> túnel MORPH -> pipeline -> "
+                        "verificador oficial (con veto). Un solo veredicto."),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "config": {"type": "object",
+                           "description": "config JSON: meta_mvp, steps, directives, budget"},
+                "candidates": {"type": "array",
+                               "description": "candidatos (con call_graph y, si aplica, circuit_path/kmb_path/factorization_path)"},
+                "best_S": {"type": "object",
+                           "description": "mejor S por tarea, ej. {\"dqi\": 3.714e12}"},
+            },
+            "required": ["candidates"],
+        },
+    },
+    {
         "name": "check_integrity",
         "description": ("Pasa el filtro de integridad obligatorio sobre "
                         "una evidencia de circuito. Un 'projection' nunca pasa."),
