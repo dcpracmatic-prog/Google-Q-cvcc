@@ -38,6 +38,22 @@ COMPETITION_VERIFIERS = Path.home() / "workspace/sandbox-run/competition-verifie
 VENV_PYTHON = Path.home() / "workspace/sandbox-run/venv/bin/python"
 KAGGLE_COMPETITION = Path(
     "/kaggle/input/competitions/google-verifiable-quantum-circuit-compilation")
+# El dataset puede montar en /kaggle/input/competitions/<slug>
+# (competition) o en /kaggle/input/<slug> (dataset): este kernel lo
+# monta en la segunda (se creó sin el campo id y Kaggle lo registró
+# como dataset). Se resuelve en tiempo de uso, no en import.
+KAGGLE_COMPETITION_CANDIDATES = [
+    KAGGLE_COMPETITION,
+    Path("/kaggle/input/google-verifiable-quantum-circuit-compilation"),
+]
+
+
+def _kaggle_competition_dir() -> Path:
+    """El dir del dataset oficial en Kaggle (el primero que exista)."""
+    for cand in KAGGLE_COMPETITION_CANDIDATES:
+        if cand.is_dir():
+            return cand
+    return KAGGLE_COMPETITION_CANDIDATES[0]
 
 
 @dataclass
@@ -184,13 +200,14 @@ def _kaggle_circuit_verifier(task: str):
     devuelve None (fail-closed: el llamador reporta que el
     verificador no pudo correr, nunca un PASS inventado).
     """
-    from .kaggle_init import detect_environment
+    from ..kaggle_init import detect_environment
     if detect_environment() != "kaggle":
         return None
+    comp = _kaggle_competition_dir()
     if task == "invsqrt":
-        script = KAGGLE_COMPETITION / "verifiers/invsqrt/verify_submission_invsqrt.py"
+        script = comp / "verifiers/invsqrt/verify_submission_invsqrt.py"
     elif task == "dqi":
-        script = KAGGLE_COMPETITION / "verifiers/dqi/verify_submission_dqi.py"
+        script = comp / "verifiers/dqi/verify_submission_dqi.py"
     else:
         return None
     if not script.is_file():
@@ -198,7 +215,7 @@ def _kaggle_circuit_verifier(task: str):
     # kickmix.so del dataset (<dataset>/kickmix/kickmix.so): el dir
     # que lo contiene va en PYTHONPATH. Si hay varios, manda el del
     # dir "kickmix".
-    found = sorted(KAGGLE_COMPETITION.glob("**/kickmix*.so"))
+    found = sorted(comp.glob("**/kickmix*.so"))
     if not found:
         return None
     found.sort(key=lambda p: (p.parent.name != "kickmix", str(p)))

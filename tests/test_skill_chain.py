@@ -52,7 +52,7 @@ def test_chain_default_plan_tunnels_and_promotes_local(tmp_path):
     out = run_vqcc_chain(_chain_config(), [_bm_candidate()],
                          runs_dir=tmp_path / "runs",
                          best_S={"dqi": 3.714e12})
-    assert out["version"] == "2.17.21"
+    assert out["version"] == "2.17.22"
     assert out["plan_order"] == ["tunnel", "proxy", "gate", "verify",
                                  "compile", "observe"]
     assert out["verify_before_compile"] is True
@@ -171,3 +171,32 @@ def test_chain_registered_as_operation_and_tool(tmp_path):
     assert entry["function"]["parameters"]["required"] == ["candidates"]
     mcp = _load_module("skill_mcp", root / "skills" / "auto-mvp-vqcc" / "mcp_server.py")
     assert any(t["name"] == "run_vqcc_chain" for t in mcp.TOOLS)
+
+
+def test_kaggle_verifier_resolver_import_y_rutas(tmp_path, monkeypatch):
+    # Regresión (Kaggle v5, 2026-11-21): _kaggle_circuit_verifier hacía
+    # `from .kaggle_init import detect_environment`, pero kaggle_init
+    # vive en auto_mvp (padre), no en auto_mvp.vqcc -> ModuleNotFoundError
+    # en Kaggle (en sandbox nunca se ejercía: el venv toma otra rama).
+    # Además el dir del dataset se resolvía solo en competitions/; este
+    # kernel lo monta en /kaggle/input/<slug> (dataset).
+    import auto_mvp.kaggle_init as kaggle_init
+    import auto_mvp.vqcc.verify as verify_mod
+
+    fake = tmp_path / "comp"
+    (fake / "verifiers" / "invsqrt").mkdir(parents=True)
+    (fake / "verifiers" / "invsqrt" / "verify_submission_invsqrt.py").write_text("# fake\n")
+    (fake / "kickmix").mkdir()
+    (fake / "kickmix" / "kickmix.so").write_text("fake\n")
+    monkeypatch.setattr(kaggle_init, "detect_environment", lambda: "kaggle")
+    monkeypatch.setattr(verify_mod, "_kaggle_competition_dir", lambda: fake)
+    resolved = verify_mod._kaggle_circuit_verifier("invsqrt")
+    assert resolved is not None
+    py, script, env = resolved
+    assert script == fake / "verifiers" / "invsqrt" / "verify_submission_invsqrt.py"
+    assert str(fake / "kickmix") in env["PYTHONPATH"]
+    # Tarea sin verificador de circuito -> None (fail-closed).
+    assert verify_mod._kaggle_circuit_verifier("chemistry") is None
+    # Sin entorno Kaggle -> None (no se inventa un verificador).
+    monkeypatch.setattr(kaggle_init, "detect_environment", lambda: "local")
+    assert verify_mod._kaggle_circuit_verifier("invsqrt") is None
