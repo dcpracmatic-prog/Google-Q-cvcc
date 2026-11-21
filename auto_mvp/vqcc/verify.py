@@ -272,10 +272,27 @@ def verify_circuit_file(
             cmd += ["--shots-per-x", str(shots_per_x)]
         if max_x:
             cmd += ["--max-x", str(max_x)]
+        # El verificador exige num_shots % batch_size == 0 (batch
+        # por defecto 256). El dominio completo a 8 shots/x son
+        # 25,067,616 shots y 25,067,616 % 256 = 96 -> ValueError
+        # inmediato (medido en Kaggle v6 y reproducido en sandbox).
+        # Se usa el mayor divisor de num_shots que sea <= 256
+        # (gcd): 256 en pantalla y en el default de 64 shots/x, 32
+        # en el dominio completo a 8 shots/x. No cambia qué shots
+        # se corren, solo el tamaño del lote.
+        _eff_shots = shots_per_x or 64
+        _eff_max_x = max_x or 3_133_452  # 3*(2**10-2)**2, default n_p=10
+        _batch = math.gcd(_eff_shots * _eff_max_x, 256)
+        if _batch != 256:
+            cmd += ["--batch-size", str(_batch)]
         full = shots_per_x in (None, 64) and max_x is None
     else:
         if num_shots:
             cmd += ["--num-shots", str(num_shots)]
+        # Misma regla en DQI (num_shots múltiplo de batch_size).
+        _batch = math.gcd(num_shots or 102_400, 256)
+        if _batch != 256:
+            cmd += ["--batch-size", str(_batch)]
         full = num_shots in (None, 102_400)
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=3600,

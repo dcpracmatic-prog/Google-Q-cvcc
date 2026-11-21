@@ -52,7 +52,7 @@ def test_chain_default_plan_tunnels_and_promotes_local(tmp_path):
     out = run_vqcc_chain(_chain_config(), [_bm_candidate()],
                          runs_dir=tmp_path / "runs",
                          best_S={"dqi": 3.714e12})
-    assert out["version"] == "2.17.22"
+    assert out["version"] == "2.17.23"
     assert out["plan_order"] == ["tunnel", "proxy", "gate", "verify",
                                  "compile", "observe"]
     assert out["verify_before_compile"] is True
@@ -200,3 +200,24 @@ def test_kaggle_verifier_resolver_import_y_rutas(tmp_path, monkeypatch):
     # Sin entorno Kaggle -> None (no se inventa un verificador).
     monkeypatch.setattr(kaggle_init, "detect_environment", lambda: "local")
     assert verify_mod._kaggle_circuit_verifier("invsqrt") is None
+
+
+def test_verify_batch_size_divide_num_shots(tmp_path):
+    # Regresión (Kaggle v6, 2026-11-21): el verificador oficial exige
+    # num_shots % batch_size == 0 (batch por defecto 256). El dominio
+    # completo a 8 shots/x son 25,067,616 shots y 25,067,616 % 256 = 96
+    # -> ValueError inmediato y VETO. La pantalla (4,096 shots) sí
+    # pasaba porque 4,096 % 256 == 0. El arreglo pasa --batch-size =
+    # gcd(num_shots, 256) (32 en el dominio completo a 8 shots/x).
+    # Prueba rápida con max_x=100, 8 shots/x: 800 shots, 800 % 256 = 32
+    # (fallaba antes del arreglo), gcd(800, 256) = 32, 800 % 32 == 0.
+    from auto_mvp.vqcc.verify import verify_circuit_file
+
+    res = verify_circuit_file(FIXTURE, "invsqrt", shots_per_x=8, max_x=100)
+    assert res.ok is True, res.failures
+    assert res.verified_by == "official-partial"
+    assert res.metrics.get("verified_shots") == 800
+    # S a max_x=100 es 72,330 (medido): depende del rango de x, no es
+    # el S del dominio completo (74,400). Solo se exige finito y
+    # positivo.
+    assert res.S == res.S and 0 < res.S < 100_000
